@@ -44,6 +44,7 @@
 module ROI(		
 				oSize,
 				iStart,
+				iDone,
 				iDATA,
 				iDVAL,
 				iCLK,
@@ -51,15 +52,17 @@ module ROI(
 				);
 
 input 	iStart;
+input 	iDone;
 input		iDATA;
 input		iDVAL;
 input		iCLK;
 input		iRST;
-output	reg	oSize;
+output	reg	[7:0] oSize;
 
 reg  target_image [239:0][319:0];
 reg [7:0] row_index = 0;
 reg [7:0] col_index = 0;
+reg finished = 0;
 integer r;
 integer c;
 
@@ -75,17 +78,27 @@ if (!iRST)
 			end*/
 	end
 else
-	begin
+begin
 	if (iStart)
 		begin
+		if (finished)
+			finished <= 0;
 		if (iDVAL)
 			begin
 			
-			target_image[row_index][col_index] <= iDATA;
+				target_image[row_index][col_index] <= iDATA;
 			
 			end // end of if val
 		end // end of if start
-	end // end of else
+	else
+	begin
+		if (iDone)
+		begin
+			oSize <= row_index;
+			finished <= 1;
+		end
+	end
+end // end of else
 end // end of always@
 
 always @(negedge iCLK)// or negedge iRST)
@@ -102,11 +115,11 @@ begin
 					row_index <= row_index + 1'b1;
 				end
 		end
-	else
-		begin
-			row_index <= 0;
-			col_index <= 0;
-		end
+	if (finished)	// reset registers for new round;
+			begin
+				row_index <= 0;
+				col_index <= 0;
+			end
 end
 
 endmodule

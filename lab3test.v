@@ -147,15 +147,19 @@ reg [9:0] white_count = 10'b0;
 reg [9:0] prev_white_count = 10'b0;
 reg [9:0] row_max_white = 10'b0;
 reg [10:0] white_threshold = 11'b0;
+reg white_counter_noise_counter = 1'b0;
+
 reg [1:0] ROI_state = 2'b00;
 reg ROI_record = 1'b0;
 reg ROI_start_signal = 1'b0;
 reg ROI_start = 1'b0;
+reg ROI_done = 1'b0;
+reg HPS_start_signal = 1'b0;
+reg ROI_started = 1'b0;
 
-
-
+wire [7:0] ROI_row_size;
 reg white_flag = 1'b0;
-
+reg test_flag = 1'b0;
 
 assign display_Color = {sCCD_P,15'b111111111111111};
 
@@ -200,10 +204,15 @@ assign	VGA_CLK		=	VGA_CTRL_CLK;
 
 //assign CCD_MCLK = rClk[0]; // 25MHZ
 
-assign	LEDR[9:3]		=	Y_Cont;
+assign	LEDR[9:9]		=	Y_Cont;
 assign	LEDR[0:0]		=	sdram_read;
 assign 	LEDR[1:1]		=	vga_read;
 assign 	LEDR[2:2] 		= 	rCCD_LVAL;
+assign	LEDR[3:3]		=  ROI_start;
+assign 	LEDR[4:4]		=	ROI_started;
+assign 	LEDR[5:5]		=	ROI_done;
+assign 	LEDR[6:6]		=	ROI_record;
+assign 	LEDR[7:7]		=	test_flag;
 assign	VGA_R		=	oVGA_R[9:2];
 assign	VGA_G		=	oVGA_G[9:2];
 assign	VGA_B		=	oVGA_B[9:2];
@@ -291,6 +300,15 @@ begin
 end
 */
 
+
+
+
+always @(posedge CLOCK_50)
+begin
+	ROI_start_signal <= !KEY[3];
+end
+
+
 always @(posedge CCD_PIXCLK or negedge KEY[0])
 begin
 	if (!KEY[0])
@@ -301,6 +319,9 @@ begin
 			row_max_white <= 0;
 			ROI_state <= 0;
 			ROI_start <= 0;
+			ROI_done <= 0;
+			ROI_started <= 0;
+			white_threshold <= 0;
 		end
 	else
 		begin
@@ -311,8 +332,20 @@ begin
 					prev_white_count <= 0;
 					row_max_white <= 0;
 					ROI_state <= 0;
-					if (ROI_start_signal)
-						ROI_start <= 1;
+					white_threshold <= 0;
+					
+					if (!ROI_started) // check if ROI has already been found for the current signal
+					begin
+						if (ROI_start_signal)
+						begin
+							ROI_start <= 1;
+							ROI_started <= 1; // remains unchanged until ROI_start_signal == 0
+							ROI_done <= 0;
+						end
+					end
+					if (ROI_started && ROI_done && !ROI_start_signal)
+						ROI_started <= 0;
+					
 				end
 				
 			if (sCCD_DVAL)	// if valid data ==================================
@@ -321,13 +354,19 @@ begin
 					if (sCCD_P) // if white
 						begin
 						
+							white_counter_noise_counter <= 0;
 							white_count <= white_count + 1'b1;
 							if (white_count > row_max_white)	// find max consecutive white in row
 								row_max_white <= white_count;
 								
 						end
 					else
-						white_count <= 0;
+					begin
+						if (white_counter_noise_counter)	// dont reset white count if only 1 black pixel
+							white_count <= 0;
+						else
+							white_counter_noise_counter <= 1;
+					end
 				end
 			else	// sCCD_DVAL = not valid ===================================
 				begin
@@ -338,7 +377,6 @@ begin
 							if (ROI_state == 2'b00)	// before ROI
 								begin
 								
-									white_threshold <= prev_white_count[9:1] + prev_white_count[9:2];
 									if (row_max_white < white_threshold)
 										begin
 											if (ROI_start)	// if start signal has been sent
@@ -348,18 +386,24 @@ begin
 													ROI_state <= 2'b01;
 												end
 										end
+									else
+										white_threshold <= prev_white_count[9:1] + prev_white_count[9:2];
 										
 								end
 							else if (ROI_state == 2'b01) // during ROI
 								begin
 								
-									white_threshold <= prev_white_count + prev_white_count[9:1];
+									test_flag <= 1;
 									if (row_max_white > white_threshold)
 									begin
 										ROI_record <= 1'b0;
 										ROI_state <= 2'b10;
 										white_threshold <= 10'b0;
+										ROI_start <= 0;
+										ROI_done <= 1;
 									end
+									else
+										white_threshold <= prev_white_count + prev_white_count[9:1];
 									
 								end
 							else if (ROI_state == 2'b10) // after ROI
@@ -418,8 +462,8 @@ CCD_Capture			u3	(
 							.iDATA(rCCD_DATA),
 							.iFVAL(rCCD_FVAL),
 							.iLVAL(rCCD_LVAL),
-							.iSTART(!KEY[3]|start_cam),// software controlled start and stop
-							.iEND(!KEY[2]|stop_cam),
+							.iSTART(start_cam),// software controlled start and stop
+							.iEND(stop_cam),
 							.iCLK(CCD_PIXCLK),
 							.iRST(DLY_RST_2)
 						);
@@ -436,8 +480,9 @@ RAW2BW				u4	(
 						);
 						
 ROI					u5(		
-							.oSize(empty),
+							.oSize(ROI_row_size),
 							.iStart(ROI_record),
+							.iDone(ROI_done),
 							.iDATA(sCCD_P),
 							.iDVAL(sCCD_DVAL),
 							.iCLK(CCD_PIXCLK),
@@ -453,7 +498,7 @@ SEG7_LUT_8 			u6	(
 							.oSEG5(HEX5),
 							.oSEG6(),
 							.oSEG7(),
-							.iDIG ({8'b0,rowsize[11:0],colsize[11:0]})//Frame_Cont[31:0])
+							.iDIG ({12'b0,rowsize[11:0],ROI_row_size})//Frame_Cont[31:0])
 						);
 
 Sdram_Control_4Port	u7	(	
