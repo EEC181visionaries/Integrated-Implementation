@@ -136,6 +136,10 @@ reg		[2:0]		read_clock_reg;
 reg					read_good;
 wire empty;
 
+wire ROI_read_data;
+wire ROI_read_clock;
+wire ROI_read_reset;
+
 reg [15:0] rowSize = 16'h00;
 reg [15:0] colSize = 16'h00;
 reg [15:0] rowCounter = 16'h00;
@@ -148,6 +152,7 @@ reg [9:0] prev_white_count = 10'b0;
 reg [9:0] row_max_white = 10'b0;
 reg [10:0] white_threshold = 11'b0;
 reg white_counter_noise_counter = 1'b0;
+reg [10:0] max_white_threshold = 11'b0;
 
 reg [1:0] ROI_state = 2'b00;
 reg ROI_record = 1'b0;
@@ -156,11 +161,13 @@ reg ROI_start = 1'b0;
 reg ROI_done = 1'b0;
 reg HPS_start_signal = 1'b0;
 reg ROI_started = 1'b0;
+reg prev_saved = 1'b0;
 
 wire [7:0] ROI_row_size;
 reg white_flag = 1'b0;
 reg test_flag = 1'b0;
-
+reg test_flag_2 = 1'b0;
+reg error_light = 1'b0;
 assign display_Color = {sCCD_P,15'b111111111111111};
 
 // muxed clock
@@ -190,8 +197,15 @@ assign	CCD_DATA[11]=	GPIO_1[1];
 assign	GPIO_1[16]	=	CCD_MCLK;
 assign	CCD_FVAL	=	GPIO_1[22];
 assign	CCD_LVAL	=	GPIO_1[21]; 
-//assign	CCD_PIXCLK	=	GPIO_1[0]; //PixCLK
-assign	CCD_PIXCLK	= CCD_MCLK;
+
+// ================================================
+//assign	CCD_PIXCLK	= CCD_MCLK;
+reg manual_clock = 0;
+reg [12:0] clock_counter = 0;
+reg  EOL = 0;
+assign 	CCD_PIXCLK	= manual_clock;
+
+
 assign	GPIO_1[19]	=	1'b1;  // tRIGGER
 assign	GPIO_1[17]	=	DLY_RST_1;
 
@@ -205,19 +219,63 @@ assign	VGA_CLK		=	VGA_CTRL_CLK;
 //assign CCD_MCLK = rClk[0]; // 25MHZ
 
 assign	LEDR[9:9]		=	Y_Cont;
-assign	LEDR[0:0]		=	sdram_read;
-assign 	LEDR[1:1]		=	vga_read;
-assign 	LEDR[2:2] 		= 	rCCD_LVAL;
-assign	LEDR[3:3]		=  ROI_start;
-assign 	LEDR[4:4]		=	ROI_started;
+assign	LEDR[0:0]		=	ROI_state[0];
+assign 	LEDR[1:1]		=	ROI_state[1];
+//assign 	LEDR[2:2] 		= 	vga_read;
+assign 	LEDR[2:2]		= error_light;
+assign	LEDR[3:3]		=  rCCD_LVAL;
+assign 	LEDR[4:4]		=	EOL;
 assign 	LEDR[5:5]		=	ROI_done;
 assign 	LEDR[6:6]		=	ROI_record;
 assign 	LEDR[7:7]		=	test_flag;
+assign 	LEDR[8:8]		=	test_flag_2;
 assign	VGA_R		=	oVGA_R[9:2];
 assign	VGA_G		=	oVGA_G[9:2];
 assign	VGA_B		=	oVGA_B[9:2];
 
-
+always @(posedge CLOCK_50)
+begin
+	if (!KEY[2])
+	begin
+		if (SW[1])
+		begin
+			if (SW[2])
+			begin
+				if (SW[3])
+				begin
+					if (clock_counter < 2)
+					begin
+						clock_counter <= clock_counter + 1'b1;
+						manual_clock <= manual_clock + 1'b1;
+					end
+				end
+				else
+				begin
+					if (clock_counter < 3200)
+					begin
+						clock_counter <= clock_counter + 1'b1;
+						manual_clock <= manual_clock + 1'b1;
+					end
+				end
+			end
+			else
+			begin
+				if (clock_counter < 320)
+				begin
+					clock_counter <= clock_counter + 1'b1;
+					manual_clock <= manual_clock + 1'b1;
+				end
+			end
+		end
+		else
+		begin
+			clock_counter <= 0;
+			manual_clock <= manual_clock + 1'b1;
+		end
+	end
+	else
+		clock_counter <= 0;
+end
 
 always@(posedge CCD_PIXCLK)
 begin
@@ -248,58 +306,6 @@ end
 assign rowsize = rowSize[15:0];
 assign colsize = colSize[15:0];
 
-/*
-always @(posedge CCD_PIXCLK or negedge KEY[0])
-begin
-	if (!KEY[0])
-		begin
-			rowSize <= 0;
-			colSize <= 0;
-			white_flag <= 0;
-		end
-	else
-		begin
-			if (!rCCD_FVAL)	// reset row every frame
-				rowCounter <= 0;
-				
-			if (sCCD_DVAL)	// if valid pixel
-			begin
-				colCounter <= colCounter + 1'b1;
-				invalCounter <= 0;
-				
-				if (sCCD_P) // if white pixel
-				begin
-					if (!white_flag) // if row not counted yet
-					begin
-						white_flag <= 1;
-						rowCounter <= rowCounter + 1;
-					end
-				end
-				
-			end
-			else	// if invalid pixel
-			begin
-				invalCounter <= invalCounter + 1'b1;
-				if (invalCounter > 4)	// end of column
-				begin
-					if (invalCounter > 200)
-						white_flag <= 0;
-					colCounter <= 0;	// reset column
-				end
-			end
-			if (rowCounter > rowSize)
-				begin
-					rowSize <= rowCounter;
-				end
-			if (colCounter > colSize)
-				begin
-					colSize <= colCounter;
-				end
-		end
-
-end
-*/
-
 
 
 
@@ -317,11 +323,16 @@ begin
 			prev_white_count <= 0;
 			invalCounter <= 0;
 			row_max_white <= 0;
-			ROI_state <= 0;
+			ROI_state <= 2'b00;
 			ROI_start <= 0;
 			ROI_done <= 0;
 			ROI_started <= 0;
+			ROI_record <= 1'b0;
 			white_threshold <= 0;
+			test_flag <= 0;
+			test_flag_2 <= 0;
+			max_white_threshold <= 0;
+			error_light <= 0;
 		end
 	else
 		begin
@@ -331,8 +342,9 @@ begin
 					white_count <= 0;
 					prev_white_count <= 0;
 					row_max_white <= 0;
-					ROI_state <= 0;
+					//ROI_state <= 2'b00;
 					white_threshold <= 0;
+					
 					
 					if (!ROI_started) // check if ROI has already been found for the current signal
 					begin
@@ -345,11 +357,16 @@ begin
 					end
 					if (ROI_started && ROI_done && !ROI_start_signal)
 						ROI_started <= 0;
-					
+					if (ROI_state == 2'b01)
+						error_light <= 1;
 				end
 				
 			if (sCCD_DVAL)	// if valid data ==================================
 				begin
+					EOL <= 0;
+					prev_saved <= 0;
+					if (white_threshold > max_white_threshold)
+						max_white_threshold <= white_threshold;
 					invalCounter <= 0;
 					if (sCCD_P) // if white
 						begin
@@ -373,17 +390,19 @@ begin
 					invalCounter <= invalCounter + 1'b1;
 					if (invalCounter > 4)
 						begin
-						
+							EOL <= 1;
 							if (ROI_state == 2'b00)	// before ROI
 								begin
-								
 									if (row_max_white < white_threshold)
 										begin
 											if (ROI_start)	// if start signal has been sent
 												begin
+													
+
 													ROI_record <= 1'b1;
-													white_threshold <= prev_white_count + prev_white_count[9:1];
+													white_threshold <= prev_white_count[9:0] + prev_white_count[9:1];
 													ROI_state <= 2'b01;
+													
 												end
 										end
 									else
@@ -392,10 +411,10 @@ begin
 								end
 							else if (ROI_state == 2'b01) // during ROI
 								begin
-								
-									test_flag <= 1;
+
 									if (row_max_white > white_threshold)
 									begin
+										test_flag <= 1;
 										ROI_record <= 1'b0;
 										ROI_state <= 2'b10;
 										white_threshold <= 10'b0;
@@ -403,7 +422,10 @@ begin
 										ROI_done <= 1;
 									end
 									else
-										white_threshold <= prev_white_count + prev_white_count[9:1];
+									begin
+										white_threshold <= prev_white_count[9:0] + prev_white_count[9:1];
+										test_flag_2 <= 1;
+									end
 									
 								end
 							else if (ROI_state == 2'b10) // after ROI
@@ -418,6 +440,20 @@ begin
 									ROI_state <= 2'b00;
 									
 								end
+							if (!prev_saved)
+							begin
+								prev_white_count <= row_max_white;
+								white_count <= 0;
+								prev_saved <= 1;
+							end
+							else
+								row_max_white <= 0;
+							
+						end // if invalCounter > 4
+						else
+						begin
+							EOL <= 0;
+							prev_saved <= 0;
 						end
 				end
 		end // end of else, not reset button
@@ -486,7 +522,10 @@ ROI					u5(
 							.iDATA(sCCD_P),
 							.iDVAL(sCCD_DVAL),
 							.iCLK(CCD_PIXCLK),
-							.iRST(DLY_RST_1)
+							.iRST(DLY_RST_1),
+							.oRead_data(ROI_read_data),
+							.iRead_clock(ROI_read_clock),
+							.iRead_reset(ROI_read_reset)
 						);
 
 SEG7_LUT_8 			u6	(	
@@ -498,7 +537,7 @@ SEG7_LUT_8 			u6	(
 							.oSEG5(HEX5),
 							.oSEG6(),
 							.oSEG7(),
-							.iDIG ({12'b0,rowsize[11:0],ROI_row_size})//Frame_Cont[31:0])
+							.iDIG ({8'b0,prev_white_count,4'b0,ROI_row_size})//Frame_Cont[31:0])
 						);
 
 Sdram_Control_4Port	u7	(	
@@ -610,7 +649,10 @@ I2C_CCD_Config 		u8	(
         .cam_start_export         (start_cam),        //           cam_start.export
 		  .source_select_export		(source_select),
 		  .clock_tester_export		(clock_test),
-		  .hps_controlled_clk_export (HPS_CTRLING_CLK)  //  hps_controlled_clk.export
+		  .hps_controlled_clk_export (HPS_CTRLING_CLK),  //  hps_controlled_clk.export
+		  .roi_clk_export            (ROI_read_clock),            //             roi_clk.export
+        .roi_rst_export            (ROI_read_reset),            //             roi_rst.export
+        .roi_data_export           (ROI_read_data)     
 		  );
 
 		  
