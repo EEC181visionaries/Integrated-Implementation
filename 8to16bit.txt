@@ -1,0 +1,3 @@
+4th Reply:
+
+http://stackoverflow.com/questions/8258398/c-how-to-combine-two-signed-8-bit-numbers-to-a-16-bit-short-unexplainable-res
