@@ -1,5 +1,3 @@
-// ROITest.c
-
 // single_digit_reader_v2.c - Reads in a photo and prints out data
 
 // Libraries
@@ -15,8 +13,8 @@
 #include "finalW1L2.c"
 */
 // Definitions
-#define WIDTH 640
-#define HEIGHT 480
+#define WIDTH 320
+#define HEIGHT 240
 #define BW_LEVEL  130
 #define BLACK 0
 #define WHITE 1
@@ -35,10 +33,17 @@
 #define CONTROLLING_CLK 0xFF200000
 #define TEST 0xFF200100
 #define DDR3_ADDR 0x00100000
-#define ROI_READ_IN 0xFF2000A0
-#define ROI_CLK_OUT 0xFF2000C0
-#define ROI_RESET_OUT 0xFF2000B0
-#define ROI_START_OUT 0xFF2000D0
+
+#define NN_WRITE_DATA_1 0xFF200140
+#define NN_WRITE_DATA_2 0xFF200120
+#define NN_WRITE_ENABLE 0xFF200130
+#define NN_WRITE_CLOCK 0xFF200110
+#define NN_READ_ENABLE 0xFF2000F0
+#define NN_READ_CLOCK 0xFF2000E0
+#define NN_BOOTUP 0xFF2000D0
+#define NN_ACCESS 0xFF2000C0
+#define NN_READ_DATA_1 0xFF2000B0
+#define NN_READ_DATA_2 0xFF2000A0
 
 // Computing ROI and Separate Images
 int w, x, y, v, lt, lb, rt, rb;
@@ -84,10 +89,47 @@ int main(void)
   volatile int * (vga_data2) = (int *) VGA_DATA2; //Output
   volatile int *(clock_select) = (int *) SOURCE_SELECT;
   volatile int *(clock_gen) = (int *) CONTROLLING_CLK;
-  volatile int *(roi_clock_out) = (int*)ROI_CLK_OUT;
-  volatile int *(roi_reset_out) = (int*)ROI_RESET_OUT;
-  volatile int *(roi_read_data) = (int*)ROI_READ_IN;
-  volatile int *(roi_start) = (int*) ROI_START_OUT;
+
+
+  volatile int *nn_write_data_1 = (int *)NN_WRITE_DATA_1;
+  volatile int *nn_write_data_2 = (int *)NN_WRITE_DATA_2;
+  volatile int *nn_write_enable = (int *)NN_WRITE_ENABLE;
+  volatile int *nn_write_clock = (int *)NN_WRITE_CLOCK;
+  volatile int *nn_read_enable = (int *)NN_READ_ENABLE;
+  volatile int *nn_read_clock = (int *)NN_READ_CLOCK;
+  volatile int *nn_bootup = (int *)NN_BOOTUP;
+  volatile int *nn_access = (int *)NN_ACCESS;
+  volatile int *nn_read_data_1 = (int *)NN_READ_DATA_1;
+  volatile int *nn_read_data_2 = (int *)NN_READ_DATA_2;
+
+  /*
+  *nn_bootup = 1;
+  *vga_data1 = 1; // reset signals to set read address
+  *vga_data1 = 0;
+  *vga_data1 = 1;
+  *nn_write_enable = 1;
+  for (int i = 0; i < 200; i++)
+  {
+      for (int j = 0; j < 784/2; j = j + 4)
+      {
+          number1 = {finalW1L1[i][j],finalW1L1[i][j+1]}
+          number2 = {finalW1L1[i][j+2],finalW1L1[i][j+3]}
+          *nn_write_data_1 = number1;
+          *nn_write_data_2 = number2;
+          *nn_write_clock = 1;
+          *nn_write_clock = 0;
+      }
+  }
+
+
+
+  */
+  *nn_write_enable = 0;
+  *nn_bootup = 0;
+
+
+
+
 
   int M;
   int i = 0;
@@ -95,79 +137,127 @@ int main(void)
   int k = 0;
   int L = 0;
   int snapshot = 0;
+  *vga_data1 = 0;
   *vga_data1 = 1;
   *vga_data2 = 1;
   *clock_select = 0;
+  
+  *nn_access = 0;
   int write_data = 0;
   int written = 0;
   int height = HEIGHT, width = WIDTH;
-  int image[240][320] = { 0 };
-  *roi_clock_out = 0;
-  *roi_reset_out = 1;
 
-
-  *cam_start = 1;
-
-  while(1)
+  int** black_white = (int**)malloc(HEIGHT*sizeof(int*));
+  for(i = 0; i < HEIGHT; i++)
   {
-    printf("Press enter to start\n");
+    black_white[i] = (int*)malloc(sizeof(int)*WIDTH);
+  }
 
-    fflush(stdin);
-    getchar();
-    fflush(stdin);
+while(1){
+  *cam_start = 1;
+  printf("Press enter to start\n");
+
+   fflush(stdin);
+   getchar();
+   fflush(stdin);
 
 
 
     // delay before capture
     for (i = 0; i < 30000; i++)
     {
-    } // delay before capture
+    }
 
-    *roi_reset_out = 0;
-    *roi_reset_out = 1;
-    *roi_start = 1;
+      *cam_start = 0; // pause camera
+      *clock_select = 1;  // choose custom clock from hps
+      *vga_data1 = 0; // reset sdram
+      *vga_data1 = 1; 
+      *sdram_read = 1;  // set read request to high
 
-    for (int r = 0; r < 240; r++)
-    {
+      // clear out first horizontal row, it is all black
+      for (k = 0; k < WIDTH+2; k = k+1)
+      {
+        *clock_gen = 1; // generate 4 clock cycles to move slower clock 1 cycle
+        *clock_gen = 0;
+        *clock_gen = 1;
+        *clock_gen = 0;
+        *clock_gen = 1;
+        *clock_gen = 0;
+        *clock_gen = 1;
+        *clock_gen = 0;
+      }
 
-        for (int c = 0; c < 320; c++)
+      // begin reading in data
+      for (j = 0; j < HEIGHT; j = j+1)
+      {
+      for (k = 0; k < WIDTH; k = k+1)
+      {
+        for (L = 0; L < 4; L = L+1)
         {
-            image[r][c] = *(roi_read_data);
-            *roi_clock_out = 1;
-            *roi_clock_out = 0;
-            
-        } // columns
+          *clock_gen = 1; // generate 4 clock cycles, checking each cycle
+          if (!written)
+          {
+            if (*read_good) // take in data from verilog to read block (not sure if needed)
+            {
+                black_white[j][k] = *(sdram_data1);
+                written = 1;
+            }
+          }
+          *clock_gen = 0;
+        }
+        written = 0;
+      }
+      *sdram_read = 0;
+      *sdram_read = 1;
+      }
+      *sdram_read = 0;
 
-    } // rows
+      *vga_data1 = 0;
+      *vga_data2 = 0;
+      *vga_data1 = 1;
+      *vga_data2 = 1;
 
-    *roi_start = 0;
+      *cam_start = 1;
+      *clock_select = 0;
+      snapshot = 0;
+      //printf("Done\n");
 
-    for (int r = 0; r < 240; r++)
+
+    *(sdram_read) = 0;
+
+    height = HEIGHT;
+    width = WIDTH;
+    printf("Full image:\n\n");
+    for (i = 0; i < height; i++)
     {
-
-        for (int c = 0; c < 320; c++)
+        for (k = 0; k < width; k++)
         {
-            printf("%i\t", image[r][c]);
-        } // columns
-
+            printf("%d\t", black_white[i][k]);
+        }
         printf("\n");
-    } // rows
+    } /* */
 
-  } // while(1)
+	printf("\nTotal Image = %d   %d\n",height, width);
+    region2(&width,&height,black_white);
+	
+	printf("ROI = %d  x %d\n",height, width);
+	printf("\n\n");
+	for (i = 0; i < height; i++)
+	{
+		for (k = 0; k < width; k++)
+		{
+			printf("%d\t",black_white[i][k]);
+		}
+		printf("\n");
+	} /* */
+	printf("Region Found\n\n");
+	digit_separate2(height,width,black_white);
+    //M = resize2(height,width,black_white);
+    //printf("Guessed %d\n\n",M);
+  }
 
   return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -183,7 +273,7 @@ void region2(int* width,int* height,int **mat)
 	printf("Initialized\n");
 
   // LROI Left Edge = xLeft
-	for (c = 0; c < cols; c = c + 25)
+	for (c = 0; c < cols; c = c + 8)
 	{
 		prev_hits = hits;
 		if (mat[r][c] == WHITE)
@@ -203,7 +293,7 @@ void region2(int* width,int* height,int **mat)
 	printf("left edge = %d\n", xLeft);
 
   // LROI Right Edge = xRight
-  for (c = cols; c > 0; c = c - 25)
+  for (c = cols; c > 0; c = c - 8)
   {
     prev_hits = hits;
     if (mat[r][c] == WHITE)
@@ -224,7 +314,7 @@ void region2(int* width,int* height,int **mat)
 
   // LROI Top Edge = yTop
   c = WIDTH/2;
-  for (r = 0; r < rows; r = r + 25)
+  for (r = 0; r < rows; r = r + 8)
   {
     prev_hits = hits;
     if (mat[r][c] == WHITE)
@@ -244,7 +334,7 @@ void region2(int* width,int* height,int **mat)
   printf("top edge = %d\n", yTop);
 
   // LROI Bottom Edge = yBot
-  for (r = rows-1; r >= 0; r = r - 25)
+  for (r = rows-1; r >= 0; r = r - 8)
   {
     prev_hits = hits;
     if (mat[r][c] == WHITE)
@@ -272,7 +362,7 @@ void region2(int* width,int* height,int **mat)
 
   r = (yBot+yTop)/2;
   int tempxEdge = (xLeft + xRight)/2;
-  for (c = xLeft; c < xRight; c = c + 5)
+  for (c = xLeft; c < xRight; c = c + 2)
   {
     prev_hits = hits;
     if (mat[r][c] == 0)
@@ -293,7 +383,7 @@ void region2(int* width,int* height,int **mat)
   printf("left = %d\n", xLeft);
 
   // ROI Right Edge = xRight
-  for (c = xRight-1; c >= xLeft; c = c - 5)
+  for (c = xRight-1; c >= xLeft; c = c - 2)
   {
     prev_hits = hits;
     if (mat[r][c] == 0)
@@ -315,7 +405,7 @@ void region2(int* width,int* height,int **mat)
 
   // ROI Top Edge = yTop
   c = tempxEdge;
-  for (r = yTop; r < yBot; r = r + 5)
+  for (r = yTop; r < yBot; r = r + 2)
   {
     prev_hits = hits;
     if (mat[r][c] == 0)
@@ -336,7 +426,7 @@ void region2(int* width,int* height,int **mat)
   printf("top = %d\n", yTop);
 
   // ROI Bottom Edge = yBot
-  for (r = yBot-1; r >= yTop; r = r - 5)
+  for (r = yBot-1; r >= yTop; r = r - 2)
   {
     prev_hits = hits;
     if (mat[r][c] == 0)
@@ -826,4 +916,5 @@ void digit_separate2(int num_row, int num_col, int **roi)
 		bad = 0;
 	}
 } // digit_separate2
+
 
