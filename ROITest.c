@@ -112,6 +112,7 @@ int main(void)
   *vga_data1 = 1;
   *nn_write_enable = 1;
   
+  // WRITING
   // finalW1L1
   for (int i = 0; i < 200; i++)
   {
@@ -179,6 +180,35 @@ int main(void)
           *nn_write_clock = 0;
       }
   } // finalSoftmaxTheta
+
+
+
+// READING
+*nn_access = 1;
+*nn_read_enable = 1;
+*vga_data1 = 0;  // reset sdram
+*vga_data1 = 1;
+int8_t testRead1, testRead2;
+
+for (int i = 0; i < 49800; i = i + 4)
+{
+
+	number1 = *nn_read_data_1;
+	number2 = *nn_read_data_2;
+	*nn_read_clock = 1;
+	*nn_read_clock = 0;
+	
+    testRead1 = number1 >> 8;
+    testRead2 = number1 & 0xff;
+    printf("%" PRId8 "\n", testRead1);
+    printf("%" PRId8 "\n", testRead2);
+    
+    testRead1 = number2 >> 8;
+    testRead2 = number2 & 0xff;
+    printf("%" PRId8 "\n", testRead1);
+    printf("%" PRId8 "\n", testRead2);
+    
+}
 
 
   */
