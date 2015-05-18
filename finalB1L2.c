@@ -1,7 +1,7 @@
 #ifndef FINALB1L2
 #define FINALB1L2
 
-static const float finalB1L2[200] = 
+static const int8_t finalB1L2[200] = 
 {
 
 -21,-38,-21,-20,10,-31,-19,-21,-4,-17,-21,-16,19,-2,-38,-27,-19,-42,-7,-21,
