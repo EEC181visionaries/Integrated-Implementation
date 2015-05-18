@@ -36,6 +36,7 @@
 #define ROI_READ_IN 0xFF2000A0
 #define ROI_CLK_OUT 0xFF2000C0
 #define ROI_RESET_OUT 0xFF2000B0
+#define ROI_START_OUT 0xFF2000D0
 
 // Computing ROI and Separate Images
 int w, x, y, v, lt, lb, rt, rb;
@@ -84,6 +85,7 @@ int main(void)
   volatile int *(roi_clock_out) = (int*)ROI_CLK_OUT;
   volatile int *(roi_reset_out) = (int*)ROI_RESET_OUT;
   volatile int *(roi_read_data) = (int*)ROI_READ_IN;
+  volatile int *(roi_start_out) = (int*)ROI_START_OUT;
 
 
   int M;
@@ -113,14 +115,18 @@ while(1){
    getchar();
    fflush(stdin);
 
+   *roi_reset_out = 0;
+   *roi_reset_out = 1;
 
+   *roi_start_out = 1;
+   
 
     // delay before capture
     for (i = 0; i < 30000; i++)
     {
     }
-    *roi_reset_out = 0;
-    *roi_reset_out = 1;
+    *roi_start_out = 0;
+
     for (int r = 0; r < 240; r++)
     {
         for (int c = 0; c < 320; c++)
