@@ -76,9 +76,9 @@ module lab3test(
 
 //	CCD
 wire	[11:0]	CCD_DATA;
-wire			CCD_SDAT;
-wire			CCD_SCLK;
-wire			CCD_FLASH;
+//wire			CCD_SDAT;
+//wire			CCD_SCLK;
+//wire			CCD_FLASH;
 wire			CCD_FVAL;
 wire			CCD_LVAL;
 wire			CCD_PIXCLK;
@@ -96,8 +96,8 @@ wire					mCCD_DVAL;
 wire					mCCD_DVAL_d;
 wire		[15:0]	X_Cont;
 wire		[15:0]	Y_Cont;
-wire		[9:0]		X_ADDR;
-wire		[31:0]	Frame_Cont;
+//wire		[9:0]		X_ADDR;
+//wire		[31:0]	Frame_Cont;
 wire					DLY_RST_0;
 wire					DLY_RST_1;
 wire					DLY_RST_2;
@@ -135,7 +135,7 @@ wire					read_clock;
 reg		[2:0]		read_clock_reg;
 reg					read_good;
 wire empty;
-
+wire new_frame;
 wire ROI_read_data;
 wire ROI_read_clock;
 wire ROI_read_reset;
@@ -155,9 +155,7 @@ reg white_counter_noise_counter = 1'b0;
 reg [10:0] max_white_threshold = 11'b0;
 
 reg [1:0] ROI_state = 2'b00;
-reg ROI_record = 1'b0;
-reg ROI_start_signal = 1'b0;
-reg ROI_start = 1'b0;
+wire ROI_start;
 reg ROI_done = 1'b0;
 reg HPS_start_signal = 1'b0;
 reg ROI_started = 1'b0;
@@ -203,7 +201,7 @@ assign	CCD_LVAL	=	GPIO_1[21];
 reg manual_clock = 0;
 reg [12:0] clock_counter = 0;
 reg  EOL = 0;
-assign 	CCD_PIXCLK	= manual_clock;
+assign 	CCD_PIXCLK	= SW[5] ? manual_clock: CCD_MCLK;
 
 
 assign	GPIO_1[19]	=	1'b1;  // tRIGGER
@@ -211,6 +209,7 @@ assign	GPIO_1[17]	=	DLY_RST_1;
 
 assign	VGA_CLK		=	VGA_CTRL_CLK;
 
+wire testing;
 
 
 
@@ -226,8 +225,8 @@ assign 	LEDR[2:2]		= error_light;
 assign	LEDR[3:3]		=  rCCD_LVAL;
 assign 	LEDR[4:4]		=	EOL;
 assign 	LEDR[5:5]		=	ROI_done;
-assign 	LEDR[6:6]		=	ROI_record;
-assign 	LEDR[7:7]		=	test_flag;
+assign 	LEDR[6:6]		=	ROI_start;
+assign 	LEDR[7:7]		=	testing;
 assign 	LEDR[8:8]		=	test_flag_2;
 assign	VGA_R		=	oVGA_R[9:2];
 assign	VGA_G		=	oVGA_G[9:2];
@@ -309,155 +308,7 @@ assign colsize = colSize[15:0];
 
 
 
-always @(posedge CLOCK_50)
-begin
-	ROI_start_signal <= !KEY[3];
-end
 
-
-always @(posedge CCD_PIXCLK or negedge KEY[0])
-begin
-	if (!KEY[0])
-		begin
-			white_count <= 0;
-			prev_white_count <= 0;
-			invalCounter <= 0;
-			row_max_white <= 0;
-			ROI_state <= 2'b00;
-			ROI_start <= 0;
-			ROI_done <= 0;
-			ROI_started <= 0;
-			ROI_record <= 1'b0;
-			white_threshold <= 0;
-			test_flag <= 0;
-			test_flag_2 <= 0;
-			max_white_threshold <= 0;
-			error_light <= 0;
-		end
-	else
-		begin
-			if (!rCCD_FVAL)	// if end of frame
-				begin
-					invalCounter <= 0;
-					white_count <= 0;
-					prev_white_count <= 0;
-					row_max_white <= 0;
-					//ROI_state <= 2'b00;
-					white_threshold <= 0;
-					
-					
-					if (!ROI_started) // check if ROI has already been found for the current signal
-					begin
-						if (ROI_start_signal)
-						begin
-							ROI_start <= 1;
-							ROI_started <= 1; // remains unchanged until ROI_start_signal == 0
-							ROI_done <= 0;
-						end
-					end
-					if (ROI_started && ROI_done && !ROI_start_signal)
-						ROI_started <= 0;
-					if (ROI_state == 2'b01)
-						error_light <= 1;
-				end
-				
-			if (sCCD_DVAL)	// if valid data ==================================
-				begin
-					EOL <= 0;
-					prev_saved <= 0;
-					if (white_threshold > max_white_threshold)
-						max_white_threshold <= white_threshold;
-					invalCounter <= 0;
-					if (sCCD_P) // if white
-						begin
-						
-							white_counter_noise_counter <= 0;
-							white_count <= white_count + 1'b1;
-							if (white_count > row_max_white)	// find max consecutive white in row
-								row_max_white <= white_count;
-								
-						end
-					else
-					begin
-						if (white_counter_noise_counter)	// dont reset white count if only 1 black pixel
-							white_count <= 0;
-						else
-							white_counter_noise_counter <= 1;
-					end
-				end
-			else	// sCCD_DVAL = not valid ===================================
-				begin
-					invalCounter <= invalCounter + 1'b1;
-					if (invalCounter > 4)
-						begin
-							EOL <= 1;
-							if (ROI_state == 2'b00)	// before ROI
-								begin
-									if (row_max_white < white_threshold)
-										begin
-											if (ROI_start)	// if start signal has been sent
-												begin
-													
-
-													ROI_record <= 1'b1;
-													white_threshold <= prev_white_count[9:0] + prev_white_count[9:1];
-													ROI_state <= 2'b01;
-													
-												end
-										end
-									else
-										white_threshold <= prev_white_count[9:1] + prev_white_count[9:2];
-										
-								end
-							else if (ROI_state == 2'b01) // during ROI
-								begin
-
-									if (row_max_white > white_threshold)
-									begin
-										test_flag <= 1;
-										ROI_record <= 1'b0;
-										ROI_state <= 2'b10;
-										white_threshold <= 10'b0;
-										ROI_start <= 0;
-										ROI_done <= 1;
-									end
-									else
-									begin
-										white_threshold <= prev_white_count[9:0] + prev_white_count[9:1];
-										test_flag_2 <= 1;
-									end
-									
-								end
-							else if (ROI_state == 2'b10) // after ROI
-								begin
-									ROI_record <= 1'b0;
-									white_threshold <= 10'b0;
-								end
-							else if (ROI_state == 2'b11) // invalid state
-								begin
-									
-									white_threshold <= 10'b0;
-									ROI_state <= 2'b00;
-									
-								end
-							if (!prev_saved)
-							begin
-								prev_white_count <= row_max_white;
-								white_count <= 0;
-								prev_saved <= 1;
-							end
-							else
-								row_max_white <= 0;
-							
-						end // if invalCounter > 4
-						else
-						begin
-							EOL <= 0;
-							prev_saved <= 0;
-						end
-				end
-		end // end of else, not reset button
-end
 
 
 
@@ -511,21 +362,24 @@ RAW2BW				u4	(
 							.iDVAL(mCCD_DVAL),
 							.oBlack_White(sCCD_P),
 							.oDVAL(sCCD_DVAL),
+							.oNewFrame(new_frame),
 							.iX_Cont(X_Cont),
 							.iY_Cont(Y_Cont)
 						);
 						
 ROI					u5(		
 							.oSize(ROI_row_size),
-							.iStart(ROI_record),
+							.iStart(ROI_start),
 							.iDone(ROI_done),
 							.iDATA(sCCD_P),
 							.iDVAL(sCCD_DVAL),
 							.iCLK(CCD_PIXCLK),
 							.iRST(DLY_RST_1),
 							.oRead_data(ROI_read_data),
+							.iNewFrame(new_frame),
 							.iRead_clock(ROI_read_clock),
-							.iRead_reset(ROI_read_reset)
+							.iRead_reset(ROI_read_reset),
+							.oStart_Test(testing)
 						);
 
 SEG7_LUT_8 			u6	(	
@@ -652,7 +506,8 @@ I2C_CCD_Config 		u8	(
 		  .hps_controlled_clk_export (HPS_CTRLING_CLK),  //  hps_controlled_clk.export
 		  .roi_clk_export            (ROI_read_clock),            //             roi_clk.export
         .roi_rst_export            (ROI_read_reset),            //             roi_rst.export
-        .roi_data_export           (ROI_read_data)     
+        .roi_data_export           (ROI_read_data),
+		  .roi_start_export          (ROI_start)
 		  );
 
 		  
