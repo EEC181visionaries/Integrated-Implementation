@@ -5,13 +5,14 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-/*
+
+// New Weights
 #include "finalB1L1.c"
 #include "finalB1L2.c"
 #include "finalSoftmaxTheta.c"
 #include "finalW1L1.c"
 #include "finalW1L2.c"
-*/
+
 // Definitions
 #define WIDTH 320
 #define HEIGHT 240
@@ -101,6 +102,8 @@ int main(void)
   volatile int *nn_access = (int *)NN_ACCESS;
   volatile int *nn_read_data_1 = (int *)NN_READ_DATA_1;
   volatile int *nn_read_data_2 = (int *)NN_READ_DATA_2;
+  
+  int16_t number1, number2;
 
   /*
   *nn_bootup = 1;
@@ -108,19 +111,74 @@ int main(void)
   *vga_data1 = 0;
   *vga_data1 = 1;
   *nn_write_enable = 1;
+  
+  // finalW1L1
   for (int i = 0; i < 200; i++)
   {
-      for (int j = 0; j < 784/2; j = j + 4)
+      for (int j = 0; j < 784/4; j = j + 4)
       {
-          number1 = {finalW1L1[i][j],finalW1L1[i][j+1]}
-          number2 = {finalW1L1[i][j+2],finalW1L1[i][j+3]}
+          number1 = (finalW1L1[i][j] << 8) | (finalW1L1[i][j+1] & 0xff);
+          number2 = (finalW1L1[i][j+2] << 8) | (finalW1L1[i][j+3] & 0xff);
           *nn_write_data_1 = number1;
           *nn_write_data_2 = number2;
           *nn_write_clock = 1;
           *nn_write_clock = 0;
       }
-  }
+  } // finalW1L1
 
+
+  // finalB1L1
+  for (int i = 0; i < 200/4; i = i + 4)
+  {
+    number1 = (finalB1L1[i] << 8) | (finalB1L1[i+1] & 0xff);
+    number2 = (finalB1L1[i+2] << 8) | (finalB1L1[i+3] & 0xff);
+    *nn_write_data_1 = number1;
+    *nn_write_data_2 = number2;
+    *nn_write_clock = 1;
+    *nn_write_clock = 0;
+  } // finalB1L1
+  
+  
+    // finalW1L2
+  for (int i = 0; i < 200; i++)
+  {
+      for (int j = 0; j < 200/4; j = j + 4)
+      {
+          number1 = (finalW1L2[i][j] << 8) | (finalW1L2[i][j+1] & 0xff);
+          number2 = (finalW1L2[i][j+2] << 8) | (finalW1L2[i][j+3] & 0xff);
+          *nn_write_data_1 = number1;
+          *nn_write_data_2 = number2;
+          *nn_write_clock = 1;
+          *nn_write_clock = 0;
+      }
+  } // finalW1L2
+
+
+  // finalB1L2
+  for (int i = 0; i < 200/4; i = i + 4)
+  {
+    number1 = (finalW1L2[i] << 8) | (finalW1L2[i+1] & 0xff);
+    number2 = (finalW1L2[i+2] << 8) | (finalW1L2[i+3] & 0xff);
+    *nn_write_data_1 = number1;
+    *nn_write_data_2 = number2;
+    *nn_write_clock = 1;
+    *nn_write_clock = 0;
+  } // finalB1L2
+
+
+    // finalSoftmaxTheta
+  for (int i = 0; i < 10; i++)
+  {
+      for (int j = 0; j < 200/4; j = j + 4)
+      {
+          number1 = (finalW1L2[i][j] << 8) | (finalW1L2[i][j+1] & 0xff);
+          number2 = (finalW1L2[i][j+2] << 8) | (finalW1L2[i][j+3] & 0xff);
+          *nn_write_data_1 = number1;
+          *nn_write_data_2 = number2;
+          *nn_write_clock = 1;
+          *nn_write_clock = 0;
+      }
+  } // finalSoftmaxTheta
 
 
   */
