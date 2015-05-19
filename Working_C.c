@@ -1,17 +1,19 @@
-// single_digit_reader_v2.c - Reads in a photo and prints out data
+// SDRv3compatible.c - region2, resize2, and recognizer complied and working
+//                     separater2 not working
 
 // Libraries
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-/*
+#include <stdint.h>
+
 #include "finalB1L1.c"
 #include "finalB1L2.c"
 #include "finalSoftmaxTheta.c"
 #include "finalW1L1.c"
 #include "finalW1L2.c"
-*/
+
 // Definitions
 #define WIDTH 320
 #define HEIGHT 240
@@ -45,6 +47,7 @@
 #define NN_READ_DATA_1 0xFF2000B0
 #define NN_READ_DATA_2 0xFF2000A0
 
+
 // Computing ROI and Separate Images
 int w, x, y, v, lt, lb, rt, rb;
 int roi[HEIGHT][WIDTH];
@@ -52,32 +55,24 @@ int digit[HEIGHT][WIDTH];
 
 
 // Timing Variables
-// Resources:
-//   http://www.tutorialspoint.com/c_standard_library/c_function_clock.htm
-clock_t regionStart, regionEnd, regionClocks, resizeStart, resizeEnd, resizeClocks;
+unsigned int region_1, resize_1, rec_1, rec_2, main_1, main_2, main_3, main_4, main_5, main_6, main_7, final; 
+unsigned int separate_end, separate_start, region_end, resize_start, resize_end, recognizer_start,recognizer_end, normalization_start, normalization_end, detection_start, detection_end;
+unsigned int LROIstart, LROIend, SROIstart, SROIend, ROImovStart, ROImovEnd;
+unsigned int resizeStart, resizeEnd, resizeMovStart, resizeMovEnd;
+unsigned int MMstart1, MMend1, vstart1, vend1, sigStart1, sigEnd1, MMstart2, MMend2, vstart2, vend2, sigStart2, sigEnd2, MMstart3, MMend3, maxStart, maxEnd;
+unsigned int digits_separated;
 
-/*
-	FOR TIMING
-	==================
-	regionStart = clock()
-	regionEnd = clock()
-	regionClocks = regionEnd - regionStart // Returns clock ticks
-	regionClocks = (double)(regionEnd - regionStart)/CLOCKS_PER_SEC; // Returns time in sec?
-	resizeStart = clock()
-	resizeEnd = clock()
-	resizeClocks = resizeEnd - resizeStart
-	
-	Do this for every function and main
+unsigned int cycle[100];
 
-*/
-
-// List of functions
-void region(void);
+// List of Functions
+//void region(void);
 void region2(int* width,int* height,int **mat);
-int resize(int height, int width, int** digit);
+//int resize(int height, int width, int** digit);
 int resize2(int height, int width, int** img);
 int recognizer(int data[784]);
 void digit_separate2(int num_row, int num_col, int **roi);
+static inline unsigned int getCycles ();
+static inline void initCounters ();
 
 int main(void)
 {
@@ -101,33 +96,6 @@ int main(void)
   volatile int *nn_access = (int *)NN_ACCESS;
   volatile int *nn_read_data_1 = (int *)NN_READ_DATA_1;
   volatile int *nn_read_data_2 = (int *)NN_READ_DATA_2;
-
-  /*
-  *nn_bootup = 1;
-  *vga_data1 = 1; // reset signals to set read address
-  *vga_data1 = 0;
-  *vga_data1 = 1;
-  *nn_write_enable = 1;
-  for (int i = 0; i < 200; i++)
-  {
-      for (int j = 0; j < 784/2; j = j + 4)
-      {
-          number1 = {finalW1L1[i][j],finalW1L1[i][j+1]}
-          number2 = {finalW1L1[i][j+2],finalW1L1[i][j+3]}
-          *nn_write_data_1 = number1;
-          *nn_write_data_2 = number2;
-          *nn_write_clock = 1;
-          *nn_write_clock = 0;
-      }
-  }
-
-
-
-  */
-  *nn_write_enable = 0;
-  *nn_bootup = 0;
-
-
 
 
 
@@ -167,6 +135,14 @@ while(1){
     for (i = 0; i < 30000; i++)
     {
     }
+      snapshot = 1;
+    if (snapshot)
+    {
+//
+//      int cycleCounter = 0;
+//      int cycleIndex = 0;
+      initCounters();
+      main_1 = getCycles();
 
       *cam_start = 0; // pause camera
       *clock_select = 1;  // choose custom clock from hps
@@ -174,8 +150,11 @@ while(1){
       *vga_data1 = 1; 
       *sdram_read = 1;  // set read request to high
 
+//
+ //     main_2 = getCycles();
+
       // clear out first horizontal row, it is all black
-      for (k = 0; k < WIDTH+2; k = k+1)
+      for (k = 0; k < WIDTH + 3; k = k+1)
       {
         *clock_gen = 1; // generate 4 clock cycles to move slower clock 1 cycle
         *clock_gen = 0;
@@ -186,6 +165,9 @@ while(1){
         *clock_gen = 1;
         *clock_gen = 0;
       }
+
+//      
+//      main_3 = getCycles();
 
       // begin reading in data
       for (j = 0; j < HEIGHT; j = j+1)
@@ -199,8 +181,8 @@ while(1){
           {
             if (*read_good) // take in data from verilog to read block (not sure if needed)
             {
-                black_white[j][k] = *(sdram_data1);
-                written = 1;
+               black_white[j][k] = *(sdram_data1);
+               written = 1;
             }
           }
           *clock_gen = 0;
@@ -209,7 +191,20 @@ while(1){
       }
       *sdram_read = 0;
       *sdram_read = 1;
+/*
+//
+        if (cycleCounter == 48)
+        {
+          cycleCounter = 0;
+          cycle[cycleIndex] = getCycles();
+          cycleIndex++;
+        }
+*/
       }
+
+// 
+//      main_3 = getCycles();
+
       *sdram_read = 0;
 
       *vga_data1 = 0;
@@ -221,26 +216,22 @@ while(1){
       *clock_select = 0;
       snapshot = 0;
       //printf("Done\n");
-
+    }
 
     *(sdram_read) = 0;
 
+//
+    main_4 = getCycles();
+
     height = HEIGHT;
     width = WIDTH;
-    printf("Full image:\n\n");
-    for (i = 0; i < height; i++)
-    {
-        for (k = 0; k < width; k++)
-        {
-            printf("%d\t", black_white[i][k]);
-        }
-        printf("\n");
-    } /* */
 
-	printf("\nTotal Image = %d   %d\n",height, width);
+    //printf("Total Image = %d   %d\n",height, width);
+    region_1 = getCycles();
     region2(&width,&height,black_white);
+    region_end = getCycles();
 	
-	printf("ROI = %d  x %d\n",height, width);
+/*	printf("ROI = %d  x %d\n",height, width);
 	printf("\n\n");
 	for (i = 0; i < height; i++)
 	{
@@ -250,10 +241,57 @@ while(1){
 		}
 		printf("\n");
 	} /* */
-	printf("Region Found\n\n");
+	//printf("Region Found\n\n");
+
+
 	digit_separate2(height,width,black_white);
-    //M = resize2(height,width,black_white);
+	//separate_end = getCycles();
+
+//    M = resize2(height,width,black_white);
+    rec_2 = getCycles();
     //printf("Guessed %d\n\n",M);
+    
+/*    	for (i = 0; i < 10; i++)
+		printf("%d:\t %u\n",i+1,cycle[i]);
+  */  
+//    printf("\n1: \t%d\n2: \t%d\n3: \t%d\n4: \n5: \n6: \t%d\n7: \t%d\n", main_1, main_2, main_3, main_6, main_7);
+
+    final = (main_4 - main_1);
+    printf("\nTimes:\nMain: \t%d\n\n", final);
+
+	final = (region_end - region_1);
+    printf("Region: \t%d\n", final);
+/*	printf("\tBreakdown:\n");
+	printf("\t Large ROI:\t%d\n", LROIend - LROIstart);
+	printf("\t Small ROI:\t%d\n", SROIend - SROIstart);
+	printf("\t Array assignmet:\t%d\n\n", ROImovEnd - ROImovStart);
+*/
+	final = (separate_end - region_end);
+	printf("Separator: \t%d\n",separate_end - separate_start);
+/*	printf("\t single digit detection:\t%d\n",detection_end - detection_start);
+	printf("\t single digit normalization:\t%d\n",normalization_end - normalization_start);
+	printf("\t digits separated:\t%d\n",digits_separated);
+*/	
+
+    final = (rec_1 - resize_1);
+    printf("Resize: \t%d\n", resize_end-resize_start);
+/*	printf("\tBreakdown:\n");
+	printf("\t resizing:\t%d\n", resizeEnd - resizeStart);
+	printf("\t Array assignment:\t%d\n\n", resizeMovEnd - resizeMovStart);
+*/
+
+    final = (rec_2 - rec_1);
+    printf("Recognize: \t%d\n", recognizer_end - recognizer_start);
+/*	printf("\tBreakdown:\n");
+	printf("\t First matrix mult:\t%d\n", MMend1 - MMstart1);
+	printf("\t First vector addition:\t%d\n", vend1 - vstart1);
+	printf("\t First sigmoid:\t%d\n", sigEnd1 -sigStart1);
+	printf("\t 2nd matrix mult:\t%d\n", MMend2 - MMstart2);
+	printf("\t 2nd vector addition:\t%d\n", vend2 - vstart2);
+	printf("\t 2nd sigmoid:\t%d\n", sigEnd2 - sigStart2);
+	printf("\t 3rd matrix mult:\t%d\n", MMend3 - MMstart3);
+	printf("\t Determining digit:\t%d\n\n", maxEnd - maxStart);
+    */
   }
 
   return 0;
@@ -270,10 +308,13 @@ void region2(int* width,int* height,int **mat)
 	int c = 0;
 	int prev_hits = 0;
 	int hits = 0;
-	printf("Initialized\n");
+	//printf("Initialized\n");
+
+//
+//	LROIstart = getCycles();
 
   // LROI Left Edge = xLeft
-	for (c = 0; c < cols; c = c + 8)
+	for (c = 0; c < cols; c = c + 4)
 	{
 		prev_hits = hits;
 		if (mat[r][c] == WHITE)
@@ -293,7 +334,7 @@ void region2(int* width,int* height,int **mat)
 	printf("left edge = %d\n", xLeft);
 
   // LROI Right Edge = xRight
-  for (c = cols; c > 0; c = c - 8)
+  for (c = cols; c > 0; c = c - 4)
   {
     prev_hits = hits;
     if (mat[r][c] == WHITE)
@@ -314,7 +355,7 @@ void region2(int* width,int* height,int **mat)
 
   // LROI Top Edge = yTop
   c = WIDTH/2;
-  for (r = 0; r < rows; r = r + 8)
+  for (r = 0; r < rows; r = r + 4)
   {
     prev_hits = hits;
     if (mat[r][c] == WHITE)
@@ -334,7 +375,7 @@ void region2(int* width,int* height,int **mat)
   printf("top edge = %d\n", yTop);
 
   // LROI Bottom Edge = yBot
-  for (r = rows-1; r >= 0; r = r - 8)
+  for (r = rows-1; r >= 0; r = r - 4)
   {
     prev_hits = hits;
     if (mat[r][c] == WHITE)
@@ -352,6 +393,8 @@ void region2(int* width,int* height,int **mat)
     }
   } // for (r = rows;...)
 
+//
+//  LROIend = getCycles();
 
   printf("bottom = %d\n", yBot);
   // ROI Left Edge = xLeft
@@ -359,9 +402,12 @@ void region2(int* width,int* height,int **mat)
 
 
 
-
   r = (yBot+yTop)/2;
   int tempxEdge = (xLeft + xRight)/2;
+
+//
+//  SROIstart = getCycles();
+
   for (c = xLeft; c < xRight; c = c + 2)
   {
     prev_hits = hits;
@@ -444,12 +490,20 @@ void region2(int* width,int* height,int **mat)
       break;
     }
   } // for (r = yBot;...)
+
+//
+//  SROIend = getCycles();
+
   printf("bot = %d\n", yBot);
 
+  //printf("sizing\n");
   // Move region of interest to (0,0) of existing array mat[r][c]
   (*width) = xRight - xLeft;
   (*height) = yBot - yTop;
-  printf("sizing\n");
+
+//
+//  ROImovStart = getCycles();
+
   for (r = 0; r < *height; r++)
   {
     for (c = 0; c < *width; c++)
@@ -458,11 +512,13 @@ void region2(int* width,int* height,int **mat)
     } // for (c = xLeft;...)
   } // for (r = yTop;...)
 
+//
+//  ROImovEnd = getCycles();
   
 } // region
 
 
-
+/*
 int resize(int height, int width, int** digit){
 
 	int digit_final[28][28];
@@ -514,9 +570,10 @@ int resize(int height, int width, int** digit){
 
   l = recognizer(digit_vector);
   return l;
-}
+}*/
 
 int resize2(int height, int width, int** img){
+	resize_start = getCycles();
 	int scaled_img[28][28];
 	int vector[784];
 
@@ -539,13 +596,16 @@ int resize2(int height, int width, int** img){
 	// Initialize the image to be all black
 	//
 	int i, j;
+	
+//
+	resizeStart = getCycles();
 	for(i = 0; i < 28; i++){
 
 		for(j = 0; j < 28; j++)
 			scaled_img[i][j] = BLACK;
 
 	}
-	printf("initialized black box\n");
+	//printf("initialized black box\n");
 	//
 	//Examine the image, magnifying rectangle by rectangle down to 28 = (size - size%28)/scale
 	//where size is the row or column and the scale is the calculated scale rounded up.
@@ -587,11 +647,14 @@ int resize2(int height, int width, int** img){
 
 		s_row++;
 	}
-	printf("resized\n");
+//
+	resizeEnd = getCycles();
+	
+	//printf("resized\n");
 	//
 	//Convert the scaled image to a vector for recognizer to use
 	//
-
+	resizeMovStart = getCycles();
   	v_index = 0;
   	for(s_col = 0; s_col < 28; s_col++)
 	{
@@ -601,8 +664,11 @@ int resize2(int height, int width, int** img){
       		v_index++;
 		}
 	}
+	
+//
+	resizeMovEnd = getCycles();
 
-	int k = 0;
+/*	int k = 0;
 	for (i = 0; i < 28; i++)
 	{
 		for (k = 0; k < 28; k++)
@@ -610,20 +676,22 @@ int resize2(int height, int width, int** img){
 			printf("%d\t",scaled_img[i][k]);
 		}
 		printf("\n");
-	}
-
+	}/**/
+	resize_end = getCycles();
   return recognizer(vector);
 }
 
 
 int recognizer(int data[784])
 {
- /* long double Vb1[200], Vb2[200], Vb3[10]; // array[row][col]
+recognizer_start = getCycles();
+  long int Vb1[200], Vb2[200], Vb3[10]; // array[row][col]
   int M = 0;
   int i,j;
   long double sum = 0;
   
-  
+//
+  MMstart1 = getCycles();
   // Vb1 = finalW1L1*data;
   for (i = 0; i < 200; i++)
   {
@@ -634,22 +702,31 @@ int recognizer(int data[784])
     Vb1[i] = sum;
     sum = 0;
   } // Product into new Matrix
+ 
+//
+  MMend1 = getCycles();
   
-  
+//
+  vstart1 = getCycles();
   //Vb1 = Vb1 + finalB1L1;
   for (i = 0; i < 200; i ++)
   {
     Vb1[i] = Vb1[i] + finalB1L1[i];
   } // Matrix Addition
-  
+//
+  vend1 = getCycles();
+//
+  sigStart1 = getCycles();
   
   //Vb1 = sigmf(Vb1,[1 0]);
   for (i = 0; i < 200; i++)
   {
     Vb1[i] = 1/(1+exp(-Vb1[i]));
   } // Sigmoid
-  
-  
+//  
+  sigEnd1 = getCycles();
+//
+  MMstart2 = getCycles();
   //Vb1 = finalW1L2*Vb1;
   for (i = 0; i < 200; i++)
   {
@@ -660,21 +737,29 @@ int recognizer(int data[784])
     Vb2[i] = sum;
     sum = 0;
   } // Product into old Matrix
-  
-  
+//  
+  MMend2 = getCycles();
+//
+  vstart2 = getCycles();
   //Vb1 = Vb1 + finalB1L2;
   for (i = 0; i < 200; i ++)
   {
     Vb2[i] = Vb2[i] + finalB1L2[i];
   } // Matrix Addition
-
-
+// 
+  vend2 = getCycles();
+//
+  sigStart2 = getCycles();
+  
   //Vb1 = sigmf(Vb1,[1 0]);
   for (i = 0; i < 200; i++)
   {
     Vb2[i] = 1/(1+exp(-Vb2[i]));
   } // Sigmoid
-  
+//
+  sigEnd2 = getCycles();
+//
+  MMstart3 = getCycles();
   
   //Vb1 = finalSoftmaxTheta*Vb1;          finalSoftmaxTheta[10][200]
   for (i = 0; i < 10; i++)
@@ -686,6 +771,10 @@ int recognizer(int data[784])
     Vb3[i] = sum;
     sum = 0;
   } // 
+//  
+  MMend3 = getCycles();
+// 
+  maxStart = getCycles();
   
  
   //M = find(Vb1==max(Vb1));
@@ -698,7 +787,8 @@ int recognizer(int data[784])
       M = i + 1;
     }
   } // Finding Max Value
-  
+//
+  maxEnd = getCycles();
   
   // Check for Zero
   //if(M == 10)
@@ -709,16 +799,15 @@ int recognizer(int data[784])
     M = 0;
   } // Check for zero
 
-  
+
   //output = M;
+recognizer_end = getCycles();
     return M;
-    */
-    return 1;
 }
 
 void digit_separate2(int num_row, int num_col, int **roi)
 {
-
+	separate_start = getCycles();
 	int mid_row = num_row/2;	
 	int c = 0;
 	
@@ -726,7 +815,6 @@ void digit_separate2(int num_row, int num_col, int **roi)
 
 	int right_edge = 0;
 	int bad = 0;
-	int col_checker = 0;
 	int first = 1;
 	int digit_num = 0;
 	int row = 0;
@@ -736,9 +824,9 @@ void digit_separate2(int num_row, int num_col, int **roi)
 	int pixel = 0;
 	int mid_col = 0;
 	int last_mid = 0;
-	int mid = 0;
 
-	int digit_size[5] = {0};
+
+	int digit_size[MAX_DIGITS] = {0};
 	int digit_top = 0;
 	int digit_bot = 0;
 	int digit_left = 0;
@@ -747,11 +835,13 @@ void digit_separate2(int num_row, int num_col, int **roi)
 	int digit_width = 0;
 	int padding = 0;
 	int horz_padding = 0;
+	int guess[MAX_DIGITS] = {0};
+	int digits_detected = 0;
 
 	digit = (int ***) malloc(MAX_DIGITS*sizeof(int **));
-	printf("Allocated int***\n");
 	for (c = 0; c < num_col; c = c+4)
 	{
+		detection_start = getCycles();
 		if ( (roi[mid_row][c] == WHITE) || (c+4 >= num_col) ) // hit white or end of roi
 		{
 			if (first) // skip the first hit of white
@@ -767,29 +857,32 @@ void digit_separate2(int num_row, int num_col, int **roi)
 					if (roi[mid_row][c] == WHITE) // skip this section if we've hit the end of the ROI
 					{
 						// start at 4 to size_y-4 to give some buffer for tilted ROI's
-						for (col_checker = 4; col_checker < num_col-4; col_checker++)
+						for (row = 4; row < num_row-4; row++)
 						{
-							if ( roi[col_checker][mid_col] == WHITE)
+							if ( roi[row][mid_col] == WHITE)
 							{
 								bad = 1;
 								break;
 							}
 						}
 					} // if (roi[r][c] == WHITE)
+					detection_end = getCycles();
 					if (!bad)
 					{
+						normalization_start = getCycles();
+						digits_detected++;
 						if (digit_num < MAX_DIGITS)
 						{
 							// check for top
 							for (row = 4; row < num_row-4; row++)
 							{
-								for (col = last_mid; col < mid; col++)
+								for (col = last_mid; col < mid_col; col++)
 								{
 									if (roi[row][col] == WHITE)
 									{
 										digit_top = row;
 										// break out of for loops
-										col = mid;
+										col = mid_col;
 										row = num_row;
 									}
 								}
@@ -797,26 +890,25 @@ void digit_separate2(int num_row, int num_col, int **roi)
 							// check for bot
 							for (row = num_row-4 - 1; row >= 4; row--)
 							{
-								for (col = last_mid; col <  mid; col++)
+								for (col = last_mid; col <  mid_col; col++)
 								{
 									digit_bot = row;
-									
-									col = mid;
-									row = -1;
+									if (roi[row][col] == WHITE)
+									{
+										col = mid_col;
+										row = -1;
+									}
 								}
 							}
-							printf("digit_top = %d\n digit_bot = %d\n",digit_top,digit_bot);
 
 							digit_height = digit_bot - digit_top;
 							padding = digit_height/5;
 
 							digit_size[digit_num] = digit_height + padding + padding;
 
-							printf("digit_height = %d\n padding = %d\n",digit_height,padding);
-							printf("digit_size[digit_num] = %d\n",digit_size[digit_num]);
 
 							// check for left
-							for (col = last_mid; col < mid; col++)
+							for (col = last_mid; col < mid_col; col++)
 							{
 								for (row = 4; row < num_row-4; row++)
 								{
@@ -824,19 +916,19 @@ void digit_separate2(int num_row, int num_col, int **roi)
 									{
 										digit_left = col;
 										row = num_row;
-										col = mid;
+										col = mid_col;
 									}
 								}
 							}
 							// check for right
-							for (col = mid-1; col >= last_mid; col--)
+							for (col = mid_col-1; col >= last_mid; col--)
 							{
 								for (row = 4; row < num_row-4; row++)
 								{
 									if (roi[row][col] == WHITE)
 									{
 										digit_right = col;
-										row = num_row;
+						last_pixel = WHITE;							row = num_row;
 										col = last_mid-1;
 									}
 								}
@@ -862,7 +954,7 @@ void digit_separate2(int num_row, int num_col, int **roi)
 								}
 							}
 
-							printf("done creating black box\n");
+
 							
 							// write digit to middle of black box
 							for (i = padding; i < padding + digit_height; i++)
@@ -872,11 +964,11 @@ void digit_separate2(int num_row, int num_col, int **roi)
 									digit[digit_num][i][j] = roi[digit_top + i - padding][digit_left + j - horz_padding];
 								}
 							}
+							normalization_end = getCycles();
 							
-							
-							
+							// ===========================
 							// print digit if checking
-							printf("digit number: %d\n", digit_num);
+							/*printf("digit number: %d\n", digit_num);
 
 
 							for (i = 0; i < digit_size[digit_num]; i++)
@@ -887,7 +979,8 @@ void digit_separate2(int num_row, int num_col, int **roi)
 								}
 								printf("\n");
 							}
-							printf("\n\n\n");
+							printf("\n\n\n");/* */
+							// ==========================
 							
 							// resize digit
 							
@@ -897,7 +990,7 @@ void digit_separate2(int num_row, int num_col, int **roi)
 							// print single digit
 							
 						} // if (digit_num < MAX_DIGITS
-						
+						last_mid = mid_col;
 						digit_num++;
 					} // if (!bad)
 				}
@@ -915,6 +1008,51 @@ void digit_separate2(int num_row, int num_col, int **roi)
 		}
 		bad = 0;
 	}
+
+
+
+// ===========
+	separate_end = getCycles();
+// ===========
+
+	digits_separated = digits_detected;
+
+	for (c = 0;c < digits_detected; c++)
+	{
+		
+		guess[c] = resize2(digit_size[c],digit_size[c],digit[c]);
+		printf("Guess = %d\n",guess[c]);
+	}
 } // digit_separate2
 
 
+
+
+
+
+static inline unsigned int getCycles ()
+{
+	unsigned int cycleCount;
+	// Read CCNT register
+	asm volatile ("MRC p15, 0, %0, c9, c13, 0\t\n": "=r"(cycleCount));
+	return cycleCount;
+}
+
+
+
+
+
+static inline void initCounters ()
+{
+	// Enable user access to performance counter
+	asm volatile ("MCR p15, 0, %0, C9, C14, 0\t\n" :: "r"(1));
+	// Reset all counters to zero
+	int MCRP15ResetAll = 23;
+	asm volatile ("MCR p15, 0, %0, c9, c12, 0\t\n" :: "r"(MCRP15ResetAll));
+	// Enable all counters:
+	asm volatile ("MCR p15, 0, %0, c9, c12, 1\t\n" :: "r"(0x8000000f));
+	// Disable counter interrupts
+	asm volatile ("MCR p15, 0, %0, C9, C14, 2\t\n" :: "r"(0x8000000f));
+	// Clear overflows:
+	asm volatile ("MCR p15, 0, %0, c9, c12, 3\t\n" :: "r"(0x8000000f));
+}
