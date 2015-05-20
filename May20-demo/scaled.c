@@ -527,178 +527,11 @@ void region2(int* width, int* height, int **mat)
 } // region
 
 
-/*
-int resize(int height, int width, int** digit){
-
-int digit_final[28][28];
-int digit_vector[784];
-int i,j;
-int x_pixels = (width + 27)/28;
-int y_pixels = (height + 27)/28;
-int k, l;
-double average;
-double square = x_pixels * y_pixels;
-int digit_x = 0, digit_y = 0;//These are the pixels of the scaled down digit
-
-for(i = 0; i < 28; i++){
-for(j = 0; j < 28; j++)
-digit_final[i][j] = 0;
-}
-
-for(i = 0; i < (height - (height%28)); i = i + y_pixels){
-digit_x = 0;
-for(j = 0; j < (width - (width%28)); j = j + x_pixels){
-average = 0;
-for(k = 0; k < y_pixels && ((i+k) < height); k++){
-for(l = 0; l < x_pixels && ((j+l) < width); l++){
-average += digit[i+k][j+l];
-}
-}
-average = average / square;
-
-if(average >= 0.5){
-digit_final[digit_y][digit_x] = 1;
-}
-else{
-digit_final[digit_y][digit_x] = 0;
-}
-digit_x++;
-}
-
-digit_y++;
-}
-k = 0;
-for(i = 0; i < 28; i++)
-{
-for(j = 0; j < 28; j++)
-{
-digit_vector[k] = digit_final[j][i];
-k++;
-}
-}
-
-l = recognizer(digit_vector);
-return l;
-}*/
-
-
-
-/*
-int resize2(int height, int width, int** img){
-    resize_start = getCycles();
-    int scaled_img[28][28];
-    int vector[784];
-
-    //
-    //col and row specify squares. p examines pixels. s is used for the scaled img. v is vector index.
-    //	
-
-    int col, row, p_col, p_row, s_col = 0, s_row = 0, v_index;
-
-    //Scales divide by 28 rounded up.	
-    int col_scale = (width + 27) / 28;
-    int row_scale = (height + 27) / 28;
-
-    //avg is used to calculate the average white density of a square, given by size square.
-    double avg;
-    double square = col_scale * row_scale;
-
-
-    //
-    // Initialize the image to be all black
-    //
-    int i, j;
-
-    //
-    resizeStart = getCycles();
-    for (i = 0; i < 28; i++){
-
-        for (j = 0; j < 28; j++)
-            scaled_img[i][j] = BLACK;
-
-    }
-    //printf("initialized black box\n");
-    //
-    //Examine the image, magnifying rectangle by rectangle down to 28 = (size - size%28)/scale
-    //where size is the row or column and the scale is the calculated scale rounded up.
-    //	
-
-    for (row = 0; row < (height - (height % 28)); row += row_scale){
-
-        s_col = 0;
-
-        for (col = 0; col < (width - (width % 28)); col += col_scale)
-        {
-
-            avg = 0;
-
-            //
-            //Calculate the average of a square given starting coordinates
-            //
-
-            for (p_row = 0; p_row < row_scale && ((row + p_row) < height); p_row++)
-            {
-                for (p_col = 0; p_col < col_scale && ((col + p_col) < width); p_col++)
-                {
-                    avg += img[row + p_row][col + p_col];
-                }
-            }
-
-            avg = avg / square;
-
-            if (avg >= 0.5)
-            {
-                scaled_img[s_row][s_col] = WHITE;
-            }
-            else
-            {
-                scaled_img[s_row][s_col] = BLACK;
-            }
-            s_col++;
-        }
-
-        s_row++;
-    }
-    //
-    resizeEnd = getCycles();
-
-    //printf("resized\n");
-    //
-    //Convert the scaled image to a vector for recognizer to use
-    //
-    resizeMovStart = getCycles();
-    v_index = 0;
-    for (s_col = 0; s_col < 28; s_col++)
-    {
-        for (s_row = 0; s_row < 28; s_row++)
-        {
-            vector[v_index] = scaled_img[s_row][s_col];
-            v_index++;
-        }
-    }
-
-    //
-    resizeMovEnd = getCycles();
-
-    	int k = 0;
-    for (i = 0; i < 28; i++)
-    {
-        for (k = 0; k < 28; k++)
-        {
-            printf("%d\t",scaled_img[i][k]);
-        }
-        printf("\n");
-    }/*
-    resize_end = getCycles();
-    return recognizer(vector);
-}
-*/
 
 
 
 
-
-// Resize attempt
+// roughly 1,973,133 cycles
 int resize2(int width, int height, int **digit) {
 
     resize_start = getCycles();
@@ -743,15 +576,6 @@ int resize2(int width, int height, int **digit) {
 
     return recognizer(vect);
 }
-
-
-
-
-
-
-
-
-
 
 
 
@@ -913,10 +737,10 @@ void digit_separate2(int num_row, int num_col, int **roi)
     int digits_detected = 0;
 
     digit = (int ***)malloc(MAX_DIGITS*sizeof(int **));
-    for (c = 1; c < num_col; c = c + 4)
+    for (c = 2; c < num_col-2; c = c + 4)
     {
         detection_start = getCycles();
-        if ((roi[mid_row][c] == WHITE) || (c + 4 >= num_col)) // hit white or end of roi
+        if ((roi[mid_row][c] == WHITE) || (c + 4 >= num_col-2)) // hit white or end of roi
         {
             if (first) // skip the first hit of white
             {
