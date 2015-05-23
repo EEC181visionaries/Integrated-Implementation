@@ -102,7 +102,7 @@ int main(void)
 
 
     int16_t number1, number2;
-
+  *cam_start = 0;
   *nn_write_clock = 0;
   *nn_read_clock = 0;
   *nn_bootup = 1;
