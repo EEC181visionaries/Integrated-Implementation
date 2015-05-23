@@ -81,8 +81,8 @@ int main(void)
     volatile int * (sdram_data1) = (int *)SDRAM_DATA1; //Input
     volatile int * (sdram_read) = (int *)READ_OUT_ADDR;  //Output
     volatile int * (read_good) = (int *)VGA_CLK_IN;  //Input
-    volatile int * (vga_data1) = (int *)VGA_DATA1; //Output
-    volatile int * (vga_data2) = (int *)VGA_DATA2; //Output
+    volatile int * (sdram_reset) = (int *)VGA_DATA1; //Output
+    volatile int * (vga_reset) = (int *)VGA_DATA2; //Output
     volatile int *(clock_select) = (int *)SOURCE_SELECT;
     volatile int *(clock_gen) = (int *)CONTROLLING_CLK;
 
@@ -106,9 +106,9 @@ int main(void)
   *nn_write_clock = 0;
   *nn_read_clock = 0;
   *nn_bootup = 1;
-  *vga_data1 = 1; // reset signals to set read address
-  *vga_data1 = 0;
-  *vga_data1 = 1;
+  *sdram_reset = 1; // reset signals to set read address
+  *sdram_reset = 0;
+  *sdram_reset = 1;
   *nn_write_enable = 1;
   
   int i = 0;
@@ -194,8 +194,8 @@ int main(void)
     // READING
     *nn_access = 1;
     *nn_read_enable = 1;
-    *vga_data1 = 0;  // reset sdram
-    *vga_data1 = 1;
+    *sdram_reset = 0;  // reset sdram
+    *sdram_reset = 1;
     int8_t testRead1, testRead2;
     for (i = 0; i < 20; i = i + 2)
     {
@@ -235,9 +235,9 @@ int main(void)
     int snapshot = 0;
     *nn_bootup = 0;
     *nn_access = 0;
-    *vga_data1 = 0;
-    *vga_data1 = 1;
-    *vga_data2 = 1;
+    *sdram_reset = 0;
+    *sdram_reset = 1;
+    *vga_reset = 1;
     *clock_select = 0;
 
 
@@ -277,8 +277,8 @@ int main(void)
 
             *cam_start = 0; // pause camera
             *clock_select = 1;  // choose custom clock from hps
-            *vga_data1 = 0; // reset sdram
-            *vga_data1 = 1;
+            *sdram_reset = 0; // reset sdram
+            *sdram_reset = 1;
             *sdram_read = 1;  // set read request to high
 
             //
@@ -335,18 +335,16 @@ int main(void)
 
             *sdram_read = 0;
 
-            *vga_data1 = 0;
-            *vga_data2 = 0;
-            *vga_data1 = 1;
-            *vga_data2 = 1;
+            *sdram_reset = 0;
+            *vga_reset = 0;
+            *sdram_reset = 1;
+            *vga_reset = 1;
 
             *cam_start = 1;
             *clock_select = 0;
             snapshot = 0;
             //printf("Done\n");
         }
-
-        *(sdram_read) = 0;
 
         //
         main_4 = getCycles();
