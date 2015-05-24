@@ -30,7 +30,7 @@
 //
 // --------------------------------------------------------------------
 //
-// Major Functions:	RAW2BW
+// Major Functions: RAW2BW
 //
 // --------------------------------------------------------------------
 //
@@ -38,183 +38,208 @@
 // --------------------------------------------------------------------
 //   Ver  :| Author            :| Mod. Date :| Changes Made:
 //   V1.0 :| Johnny FAN        :| 07/07/09  :| Initial Revision
-//   V2.0 :| Jessica MA	       :| 05/04/15  :| RGB to BW
+//   V2.0 :| Jessica MA        :| 05/04/15  :| RGB to BW
+//   V3.0 :| Jessica MA        :| 05/24/15  :| Find Left and Right Bound
 // --------------------------------------------------------------------
 
-module ROI(		
-				oSize,
-				iStart,
-				iDone,
-				iDATA,
-				iDVAL,
-				iCLK,
-				iRST
-				);
+module ROI( 
+        oDone,
+        oLeftBound,
+        oRightBound,
+        iStart,
+        iDATA,
+        iDVAL,
+        iCLK,
+        iRST
+        );
 
-input 		iStart;
-input 		iDone;
-input		iDATA;
-input		iDVAL;
-input		iCLK;
-input		iRST;
-output	reg	[7:0] oSize;
+input   iStart;
+input   iDATA;
+input   iDVAL;
+input   iCLK;
+input   iRST;
+output  wire oDone;
+output  wire [7:0] oLeftBound;
+output  wire [7:0] oRightBound;
 
-// SDRAM Storage of Image
-reg  target_image [239:0][319:0];
-
-// Index for Storing Image
+// Index for Summing Image
 reg [7:0] row_index = 0;
 reg [7:0] col_index = 0;
-reg finished = 0;
-integer r;
-integer c;
+reg       finished = 0;
+integer   r;
 
-// Calculating Start and End Columns
+// Calculating Left and Right Bounds (left and right columns)
 reg [7:0] sum[319:0] = 0;
 reg [7:0] prev_sum = 0;
-reg [7:0] left_bound = 0;
-reg [7:0] right_bound = 0;
-reg 		calcStart = 0;
-reg 		calcDone = 0;
-reg 		sumEnable = 0;
+reg [7:0] leftBound = 0;
+reg [7:0] rightBound = 0;
+reg       calcStart = 0;
+reg       done = 0;
+reg       ready = 1;
+
+assign oLeftBound = leftBound;
+assign oRightBound = rightBound;
+assign oDone = done;
 
 
+//
+// Calculate Sum
+//
 always @(posedge iCLK or negedge iRST)
 begin
 
-	if (!iRST)
-	begin // if reset
-/*			for (r = 0; r < 240; r = r+1)
-			begin
-				for (c = 0; c < 320; c = c+1)
-					target_image[r][c] <= 0;
-			end*/
-	end // if reset
+  if (!iRST)
+  begin // if reset
+    sum <= 0;
+    prev_sum <= 0;
+    leftBound <= 0;
+    rightBound <= 0;
+    calcStart <= 0;
+    done <= 0;
+    ready <= 1;
+    row_index <= 0;
+    col_index <= 0;
+    finished <= 0;
+  end // if reset
 
-	else
-	begin // if not reset
-		
-		if (iStart)
-		begin
+  else
+  begin // if not reset
+    
+    if (iStart)
+    begin
 
-			if (finished)
-				finished <= 0;
+      if (iDVAL)
+      begin
+        sum[col_index] <= iDATA + sum[col_index];
+      end // if valid
 
-			if (iDVAL)
-			begin
-				//target_image[row_index][col_index] <= iDATA;
-				sum[col_index] <= iDATA;
-			end // if valid
+    end // if start
+    else if (!iStart)
+    begin // if not start
 
-		end // if start
+      if ((sum[0] != 0) && (done == 0))
+      begin
+        calcStart <= 1;
+        finished <= 1;
+      end
 
-		else if (!iStart)
-		begin // if not start
+    end // if not start
 
-			if ((sum[0] != 0) && (calcDone == 0))
-			begin
-				calcStart = 1;
-			end
-
-			if (iDone)
-			begin
-				oSize <= row_index;
-				finished <= 1;
-			end // if done
-
-		end // if not start
-
-	end // not reset
+  end // not reset
 
 end // at clk or rst
 
 
-// Calculate Start and End Columns
-always @(calcStart)
+//
+// Calculate Right and Right Bounds
+//
+always @(posedge calcStart)
 begin
+  prev_sum <= sum[0];
 
-	for (r = 0; r < 319; r = r + 1)
-	begin
+  for (r = 1; r < 319; r = r + 1)
+  begin
 
-		if ((sum[r] < (.75 * prev_sum)) && (end_col == 0))
-		begin
-			start_col = r;
-		end
+    if ((sum[r] < (.75 * prev_sum)) && (right_bound == 0))
+    begin
+      left_bound <= r;
+    end
 
-		else if ((sum[r] > (1.50 * prev_sum)) && (start_col != 0))
-		begin
-			end_col = r;
-		end
+    else if ((sum[r] > (1.50 * prev_sum)) && (left_bound != 0))
+    begin
+      right_bound <= r;
+    end
 
-		prev_sum = sum[r];
-	end
+    prev_sum <= sum[r];
+  end
 
+  done <= 1;
+  calcStart <= 0;
 end // Calculate Start and End Column
 
 
+//
 // Set index for matrix
+//
 always @(negedge iCLK)// or negedge iRST)
 begin
 
-	if (iStart)
-	begin
+  if (iStart)
+  begin
+    if ((ready == 0) && (finished == 1))
+    begin
+      sum <= 0;
+      prev_sum <= 0;
+      leftBound <= 0;
+      rightBound <= 0;
+      calcStart <= 0;
+      done <= 0;
+      ready <= 1 ;
+      finished <= 0
+    end
 
-		if (iDVAL)
-		begin
-			col_index <= col_index + 1'b1;
-		end
+    if (iDVAL)
+    begin
+      col_index <= col_index + 1'b1;
+    end
 
-		if (col_index > 319)
-		begin
-			col_index <= 0;
-			row_index <= row_index + 1'b1;
-		end
+    if (col_index > 319)
+    begin
+      col_index <= 0;
+      row_index <= row_index + 1'b1;
+    end
 
-	end
+  end
 
-	if (finished)	// reset registers for new round;
-	begin
-		row_index <= 0;
-		col_index <= 0;
-	end
+  if (finished) // reset registers for new round;
+  begin
+    row_index <= 0;
+    col_index <= 0;
+  end
 
 end
 
+//
+// Calculating Left and Right Boudns
+//
+/*
 always @(finished)
 begin
 
-	if (finished == 1)
-	begin
-		prev_sum = sum[0];
+  if (finished == 1)
+  begin
+    prev_sum = sum[0];
 
-		for (i = 0; i < 320; i++)
-		begin
+    for (i = 0; i < 320; i++)
+    begin
 
-			if (left_bound == 0)
-			begin
+      if (left_bound == 0)
+      begin
 
-				if ((sum[i] < 120) && (prev_sum < 120))
-				begin
-					left_bound = i - 1;
-				end // setting left bound
+        if ((sum[i] < 120) && (prev_sum < 120))
+        begin
+          left_bound = i - 1;
+        end // setting left bound
 
-			end // if no left bound
+      end // if no left bound
 
-			else if ((left_bound != 0) && (right_bound == 0))
-			begin
+      else if ((left_bound != 0) && (right_bound == 0))
+      begin
 
-				if ((sum[i] > 120) && (prev_sum < 120))
-				begin
-					right_bound = i - 1;
-				end // setting right bound
+        if ((sum[i] > 120) && (prev_sum < 120))
+        begin
+          right_bound = i - 1;
+        end // setting right bound
 
-			end // if no right bound
+      end // if no right bound
 
-		end // go though all the sums and find left and right bounds
+    end // go though all the sums and find left and right bounds
 
-	end // if finished == 1
+  end // if finished == 1
 
 end // if finished
+*/
+
 
 endmodule
 
