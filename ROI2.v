@@ -59,8 +59,8 @@ input   iDVAL;
 input   iCLK;
 input   iRST;
 output  wire oDone;
-output  wire [7:0] oLeftBound;
-output  wire [7:0] oRightBound;
+output  wire [8:0] oLeftBound;
+output  wire [8:0] oRightBound;
 
 // Index for Summing Image
 reg [7:0] row_index = 0;
