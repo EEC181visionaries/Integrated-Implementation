@@ -203,6 +203,9 @@ int main(void)
     int written = 0;
     int height = HEIGHT, width = WIDTH;
 
+    // Assigning data values into matrix 320x240
+    int image[height][width] = 0;
+
 
     int** black_white = (int**)malloc(HEIGHT*sizeof(int*));
     for (i = 0; i < HEIGHT; i++)
@@ -247,7 +250,12 @@ int main(void)
                 *ready_for_data = 1;
                 *ready_for_data = 0;
                 testing_number = *img_data;
-                printf("%d\t", testing_number);
+                for (l = 0; l < 32; l++)
+                {
+                    image[j][((k * 10) + (32-l))] = (testing_number & (1 << l)) != 0;
+                    printf("%d\t", image[j][((k * 10) + (32-l))]);
+                }
+                //printf("%d\t", testing_number);
             }
             printf("\n");
         }
