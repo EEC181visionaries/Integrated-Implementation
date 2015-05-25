@@ -7,13 +7,13 @@
 #include <math.h>
 #include <time.h>
 #include <stdint.h>
-
+/*
 #include "finalB1L1.c"
 #include "finalB1L2.c"
 #include "finalSoftmaxTheta.c"
 #include "finalW1L1.c"
 #include "finalW1L2.c"
-
+/**/
 // Definitions
 #define WIDTH 320
 #define HEIGHT 240
@@ -47,9 +47,9 @@
 #define NN_READ_DATA_1 0xFF2000B0
 #define NN_READ_DATA_2 0xFF2000A0
 
-#define IMG_DATA 0xFF20017F
-#define READY_FOR_DATA 0xFF20016F
-#define DATA_QUEUE_RESET 0xFF20015F
+#define IMG_DATA 0xFF200170
+#define READY_FOR_DATA 0xFF200160
+#define DATA_QUEUE_RESET 0xFF200150
 
 #define SIZING_DONE 0xFF2001C0
 #define SIZING_LEFT 0xFF2001B0
@@ -121,7 +121,6 @@ int main(void)
     volatile int *roi_top = (int *)SIZING_TOP;
     volatile int *roi_bot = (int *)SIZING_BOT;
 
-
     /*
     int16_t number1, number2;
     *cam_start = 0;
@@ -175,18 +174,14 @@ int main(void)
 
     *nn_write_enable = 0;
     *nn_bootup = 0;
-
-
-    
-    
-
     *nn_read_enable = 0;
     *nn_access = 0;
+    *cam_start = 0;
+    *ready_for_data = 0;
+    *data_reset = 1;
 
-
-
-
-
+    int testing_number = 0;
+    int testing_matrix[HEIGHT][WIDTH];
 
 
     int M;
@@ -201,11 +196,13 @@ int main(void)
     *sdram_reset = 1;
     *vga_reset = 1;
     *clock_select = 0;
-
+    *ready_for_data = 0;
+    
 
     int write_data = 0;
     int written = 0;
     int height = HEIGHT, width = WIDTH;
+
 
     int** black_white = (int**)malloc(HEIGHT*sizeof(int*));
     for (i = 0; i < HEIGHT; i++)
@@ -228,92 +225,78 @@ int main(void)
         for (i = 0; i < 30000; i++)
         {
         }
-        snapshot = 1;
-        if (snapshot)
+
+
+        initCounters();
+        main_1 = getCycles();
+
+        *cam_start = 0; // pause camera
+        *clock_select = 1;  // choose custom clock from hps
+        *sdram_reset = 0; // reset sdram
+        *sdram_reset = 1;
+        *sdram_read = 1;  // set read request to high
+
+
+
+        *data_reset = 0;
+        *data_reset = 1;
+        for (j = 0; j < HEIGHT; j = j + 1)
         {
-            //
-            //      int cycleCounter = 0;
-            //      int cycleIndex = 0;
-            initCounters();
-            main_1 = getCycles();
-
-            *cam_start = 0; // pause camera
-            *clock_select = 1;  // choose custom clock from hps
-            *sdram_reset = 0; // reset sdram
-            *sdram_reset = 1;
-            *sdram_read = 1;  // set read request to high
-
-            //
-            //     main_2 = getCycles();
-
-            // clear out first horizontal row, it is all black
-            for (k = 0; k < WIDTH + 3; k = k + 1)
+            for (k = 0; k < WIDTH; k = k + 32)
             {
-                *clock_gen = 1; // generate 4 clock cycles to move slower clock 1 cycle
-                *clock_gen = 0;
-                *clock_gen = 1;
-                *clock_gen = 0;
-
+                *ready_for_data = 1;
+                *ready_for_data = 0;
+                testing_number = *img_data;
+                printf("%d\t", testing_number);
             }
-
-            //      
-            //      main_3 = getCycles();
-
-            // begin reading in data
-            for (j = 0; j < HEIGHT; j = j + 1)
-            {
-                for (k = 0; k < WIDTH; k = k + 1)
-                {
-                    for (L = 0; L < 2; L = L + 1)
-                    {
-                        *clock_gen = 1; // generate 4 clock cycles, checking each cycle
-                        if (!written)
-                        {
-                            if (*read_good) // take in data from verilog to read block (not sure if needed)
-                            {
-                                black_white[j][k] = *(sdram_data1);
-                                written = 1;
-                            }
-                        }
-                        *clock_gen = 0;
-                    }
-                    written = 0;
-                }
-                *sdram_read = 0;
-                *sdram_read = 1;
-                /*
-                //
-                if (cycleCounter == 48)
-                {
-                cycleCounter = 0;
-                cycle[cycleIndex] = getCycles();
-                cycleIndex++;
-                }
-                */
-            }
-
-            // 
-            //      main_3 = getCycles();
-
-            *sdram_read = 0;
-
-            *sdram_reset = 0;
-            *vga_reset = 0;
-            *sdram_reset = 1;
-            *vga_reset = 1;
-
-            *cam_start = 1;
-            *clock_select = 0;
-            snapshot = 0;
-            //printf("Done\n");
+            printf("\n");
         }
+
+
+        // begin reading in data
+        /*for (j = 0; j < HEIGHT; j = j + 1)
+        {
+            for (k = 0; k < WIDTH; k = k + 1)
+            {
+                for (L = 0; L < 2; L = L + 1)
+                {
+                    *clock_gen = 1; // generate 4 clock cycles, checking each cycle
+                    if (!written)
+                    {
+                        if (*read_good) // take in data from verilog to read block (not sure if needed)
+                        {
+                            black_white[j][k] = *(sdram_data1);
+                            written = 1;
+                        }
+                    }
+                    *clock_gen = 0;
+                }
+                written = 0;
+            }
+            *sdram_read = 0;
+            *sdram_read = 1;
+
+        }*/
+
+
+        //*sdram_read = 0;
+
+        *sdram_reset = 0;
+        *vga_reset = 0;
+        *sdram_reset = 1;
+        *vga_reset = 1;
+
+        *cam_start = 1;
+        *clock_select = 0;
+        snapshot = 0;
+        //printf("Done\n");
 
         //
         main_4 = getCycles();
 
         height = HEIGHT;
         width = WIDTH;
-        
+        /*
         printf("Image = %d  x %d\n", height, width);
         printf("\n\n");
         for (i = 0; i < height; i++)
@@ -328,7 +311,7 @@ int main(void)
 
         //printf("Total Image = %d   %d\n",height, width);
         region_1 = getCycles();
-        region2(&width, &height, black_white);
+        //region2(&width, &height, black_white);
         region_end = getCycles();
         /*
         printf("ROI = %d  x %d\n",height, width);
@@ -344,7 +327,7 @@ int main(void)
         //printf("Region Found\n\n");
 
 
-        digit_separate2(height, width, black_white);
+        //digit_separate2(height, width, black_white);
         //separate_end = getCycles();
         rec_2 = getCycles();
         printf("Done\n");
@@ -864,6 +847,8 @@ int recognizer(int data[784])
     int i, j;
     long double sum = 0;
 
+
+    /*
     //
     MMstart1 = getCycles();
     // Vb1 = finalW1L1*data;
@@ -975,7 +960,7 @@ int recognizer(int data[784])
 
 
     //output = M;
-    
+    /**/
     return M;
 }
 
