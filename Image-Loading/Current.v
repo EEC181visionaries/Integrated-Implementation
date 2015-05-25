@@ -19,6 +19,8 @@ module lab3test(
 	output [6:0] HEX1,
 	output [6:0] HEX2,
 	output [6:0] HEX3,
+	output [6:0] HEX4,
+	output [6:0] HEX5,
 
 	// LEDs
 	output [9:0] LEDR,
@@ -132,12 +134,18 @@ reg 		[16:0]		gray;					// Converts VGA color to grayscale
 wire		[1:0]		controlled_clk;
 wire					HPS_CTRLING_CLK;
 wire 		[1:0]		controlled_read;
+
+wire 					queuer_read;
+
+
 // muxed clock
 assign controlled_clk[0] = VGA_CTRL_CLK;
-assign controlled_clk[1] = read_clock;
+//assign controlled_clk[1] = read_clock;
+assign controlled_clk[1] = queuer_clk;
 // muxed read
 assign controlled_read[1] = vga_read;
-assign controlled_read[0] = sdram_read;
+//assign controlled_read[0] = sdram_read;
+assign controlled_read[0] = queuer_read;
 
 wire					read_select;
 assign read_select = start_cam;
@@ -269,14 +277,14 @@ assign rd1_data = neural_access ? NN_read_data_1: Read_DATA1;
 assign rd1_enable = neural_access ? NN_read_enable : controlled_read[read_select];
 assign rd1_addr = neural_access ? 20'h50000 : 0;
 assign rd1_max_addr = neural_access ? (20'h50000 + 50000) : (320*240);
-assign rd1_load = neural_access ? ((!DLY_RST_0)|(!vga_read_DATA1)) : ((!DLY_RST_0)|(!vga_read_DATA1));
+assign rd1_load = neural_access ? ((!DLY_RST_0)|(!vga_read_DATA1)) : ((!DLY_RST_0)|(!vga_read_DATA1)|(!queuer_rst));
 assign rd1_clk = neural_access ? NN_read_clock : ~controlled_clk[source_select];
 
 assign rd2_data = neural_access ? NN_read_data_2 : Read_DATA2;
 assign rd2_enable = neural_access ? NN_read_enable : controlled_read[read_select];
 assign rd2_addr = neural_access ? (22'h100000+20'h50000) : 22'h100000;
 assign rd2_max_addr = neural_access ? (22'h100000+20'h50000 + 50000) : (22'h100000+320*240);
-assign rd2_load = neural_access ? ((!DLY_RST_0)|(!vga_read_DATA1)) : ((!DLY_RST_0)|(!vga_read_DATA1));
+assign rd2_load = neural_access ? ((!DLY_RST_0)|(!vga_read_DATA1)) : ((!DLY_RST_0)|(!vga_read_DATA1)|(!queuer_rst));
 assign rd2_clk = neural_access ? NN_read_clock : ~controlled_clk[source_select];
 
 assign NN_read_data_1 = Read_DATA1;
@@ -315,13 +323,13 @@ begin
 	read_good = read_clock_reg;
 end
 
-
-
+wire [6:0] counterTest;
+wire flag_test;
 // ============================================ LEDs
-assign	LEDR[9:3]		=	DRAM_ADDR[11:5];
+assign	LEDR[9:3]		=	counterTest;
 assign	LEDR[0:0]		=	sdram_read;
 assign 	LEDR[1:1]		=	vga_read;
-assign 	LEDR[2:2]		= neural_access;
+assign 	LEDR[2:2]		=  flag_test;
 
 // ==============================================
 
@@ -364,7 +372,7 @@ CCD_Capture			u3	(
 							.iDATA(rCCD_DATA),
 							.iFVAL(rCCD_FVAL),
 							.iLVAL(rCCD_LVAL),
-							.iSTART(!KEY[3]|start_cam),// software controlled start and stop
+							.iSTART(start_cam),// software controlled start and stop
 							.iEND(!KEY[2]|stop_cam),
 							.iCLK(CCD_PIXCLK),
 							.iRST(DLY_RST_2)
@@ -381,6 +389,8 @@ RAW2BW				u4	(
 							.iY_Cont(Y_Cont)
 						);
 
+						
+
 SEG7_LUT_8 			u5	(	
 							.oSEG0(HEX0),
 							.oSEG1(HEX1),
@@ -390,7 +400,7 @@ SEG7_LUT_8 			u5	(
 							.oSEG5(),
 							.oSEG6(),
 							.oSEG7(),
-							.iDIG (img_data)//{16'b0,Read_DATA1})//Frame_Cont[31:0])
+							.iDIG (img_data[23:0])//{16'b0,Read_DATA1})//Frame_Cont[31:0])
 						);
 
 Sdram_Control_4Port	u7	(	
@@ -453,10 +463,13 @@ BitQueuer 				u9(
 							.oData(img_data),
 							.oRD_CLK(queuer_clk),
 							.oRD_RST(queuer_rst),
+							.oflag(flag_test),
+							.oCounter(counterTest),
+							.oRead_req(queuer_read),
 							.iData(Read_DATA1[13]),
 							.iCLK(sdram_ctrl_clk),
 							.iRST(hps_queuing_rst & KEY[0]),
-							.iHPS_CLK(hps_queuing_ready),
+							.iHPS_CLK(~KEY[3]|hps_queuing_ready),//hps_queuing_ready),
 							.iHPS_RST()
 						);
 						
