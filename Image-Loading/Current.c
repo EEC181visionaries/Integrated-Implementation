@@ -277,7 +277,7 @@ int main(void)
         region2(&width, &height, image);
         region_end = getCycles();
 
-        printf("ROI = %d  x %d\n", height, width);
+        /*printf("ROI = %d  x %d\n", height, width);
         printf("\n\n");
         for (i = 0; i < height; i++)
         {
