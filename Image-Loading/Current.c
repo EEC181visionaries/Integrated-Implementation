@@ -52,6 +52,7 @@
 #define DATA_QUEUE_RESET 0xFF200150
 
 #define SIZING_DONE 0xFF2001C0
+#define SIZING_START 0xFF2001D0
 #define SIZING_LEFT 0xFF2001B0
 #define SIZING_RIGHT 0xFF2001A0
 #define SIZING_TOP 0xFF200190
@@ -99,7 +100,6 @@ int main(void)
     volatile int *(clock_select) = (int *)SOURCE_SELECT;
     volatile int *(clock_gen) = (int *)CONTROLLING_CLK;
 
-
     volatile int *nn_write_data_1 = (int *)NN_WRITE_DATA_1;
     volatile int *nn_write_data_2 = (int *)NN_WRITE_DATA_2;
     volatile int *nn_write_enable = (int *)NN_WRITE_ENABLE;
@@ -116,60 +116,12 @@ int main(void)
     volatile int *data_reset = (int *)DATA_QUEUE_RESET;
 
     volatile int *sizing_done = (int *)SIZING_DONE;
+    volatile int *sizing_start = (int *)SIZING_START;
     volatile int *roi_left = (int *)SIZING_LEFT;
     volatile int *roi_right = (int *)SIZING_RIGHT;
     volatile int *roi_top = (int *)SIZING_TOP;
     volatile int *roi_bot = (int *)SIZING_BOT;
 
-    /*
-    int16_t number1, number2;
-    *cam_start = 0;
-    *nn_write_clock = 0;
-    *nn_read_clock = 0;
-    *nn_bootup = 1;
-    *sdram_reset = 1; // reset signals to set read address
-    *sdram_reset = 0;
-    *sdram_reset = 1;
-    *nn_write_enable = 1;
-  
-    int i = 0;
-    int j = 0;
-
-
-  
-    for (i = 0; i < 20; i = i + 2)
-    {
-        number1 = i;
-        number2 = i+1;
-        *nn_write_data_1 = number1;
-        *nn_write_data_2 = number2;
-        *nn_write_clock = 1;
-        *nn_write_clock = 0;
-        for (j = 0; j < 3000000; j++)
-        {
-        }
-    }
-
-
-    // READING
-    *nn_access = 1;
-    
-    *sdram_reset = 0;  // reset sdram
-    *sdram_reset = 1; 
-    *nn_read_enable = 1;
-    int8_t testRead1, testRead2;
-    for (i = 0; i < 20; i = i + 2)
-    {
-        number1 = *nn_read_data_1;
-        number2 = *nn_read_data_2;
-        *nn_read_clock = 1;
-        *nn_read_clock = 0;
-
-        printf("%d\t", number1);
-        printf("%d\n", number2);
-
-    }
-    /**/
 
 
     *nn_write_enable = 0;
@@ -177,34 +129,34 @@ int main(void)
     *nn_read_enable = 0;
     *nn_access = 0;
     *cam_start = 0;
-    *ready_for_data = 0;
+    *ready_for_data = 1;
     *data_reset = 1;
 
-    int testing_number = 0;
-    int testing_matrix[HEIGHT][WIDTH];
 
-
-    int M;
+    int pre_split = 0;
+    int M = 0;
     int i = 0;
     int j = 0;
     int k = 0;
     int L = 0;
+    int l = 0;
     int snapshot = 0;
+
     *nn_bootup = 0;
     *nn_access = 0;
     *sdram_reset = 0;
     *sdram_reset = 1;
     *vga_reset = 1;
     *clock_select = 0;
-    *ready_for_data = 0;
-    
+    *ready_for_data = 1;
+
 
     int write_data = 0;
     int written = 0;
     int height = HEIGHT, width = WIDTH;
+    int printed_rows = 0;
 
-    // Assigning data values into matrix 320x240
-    int image[height][width] = 0;
+    int image[HEIGHT][WIDTH] = { 0 };
 
 
     int** black_white = (int**)malloc(HEIGHT*sizeof(int*));
@@ -214,8 +166,11 @@ int main(void)
     }
 
     while (1){
+
         *cam_start = 1;
         totalCycles = 0;
+        printed_rows = 0;
+
         printf("Press enter to start\n");
 
         fflush(stdin);
@@ -225,7 +180,7 @@ int main(void)
 
 
         // delay before capture
-        for (i = 0; i < 30000; i++)
+        for (i = 0; i < 3000; i++)
         {
         }
 
@@ -238,56 +193,53 @@ int main(void)
         *sdram_reset = 0; // reset sdram
         *sdram_reset = 1;
         *sdram_read = 1;  // set read request to high
-
-
-
         *data_reset = 0;
         *data_reset = 1;
+        for (l = 0; l < 2; l = l + 1)
+        {
+
+        }
+        
+        // throwing away the first row and offsets
+        for (j = 0; j < 6; j = j + 1)
+        {
+            *ready_for_data = 1;
+            *ready_for_data = 0;
+            *ready_for_data = 1;
+            *ready_for_data = 0;
+            for (l = 0; l < 2; l = l + 1)
+            {
+                // delay enough time for the module to grab 32 bits
+            }
+            pre_split = *img_data;
+        }
+
+        // Reading in image data
         for (j = 0; j < HEIGHT; j = j + 1)
         {
-            for (k = 0; k < WIDTH; k = k + 32)
+            for (k = 0; k < WIDTH/32; k = k + 1)
             {
                 *ready_for_data = 1;
                 *ready_for_data = 0;
-                testing_number = *img_data;
-                for (l = 0; l < 32; l++)
+                *ready_for_data = 1;
+                *ready_for_data = 0;
+                for (l = 0; l < 2; l = l + 1)
                 {
-                    image[j][((k * 10) + (32-l))] = (testing_number & (1 << l)) != 0;
-                    printf("%d\t", image[j][((k * 10) + (32-l))]);
+                    // delay enough time for the module to grab the 32 bits
                 }
-                //printf("%d\t", testing_number);
+                pre_split = *img_data;
+                for (l = 0; l < 32; l = l + 1)
+                {
+                    image[j][k * 32 + l] = (pre_split >> l) & 0x01;
+                }
+
             }
-            printf("\n");
         }
+        //*data_reset = 0;
+        //*data_reset = 1;
 
 
-        // begin reading in data
-        /*for (j = 0; j < HEIGHT; j = j + 1)
-        {
-            for (k = 0; k < WIDTH; k = k + 1)
-            {
-                for (L = 0; L < 2; L = L + 1)
-                {
-                    *clock_gen = 1; // generate 4 clock cycles, checking each cycle
-                    if (!written)
-                    {
-                        if (*read_good) // take in data from verilog to read block (not sure if needed)
-                        {
-                            black_white[j][k] = *(sdram_data1);
-                            written = 1;
-                        }
-                    }
-                    *clock_gen = 0;
-                }
-                written = 0;
-            }
-            *sdram_read = 0;
-            *sdram_read = 1;
-
-        }*/
-
-
-        //*sdram_read = 0;
+        *sdram_read = 0;
 
         *sdram_reset = 0;
         *vga_reset = 0;
@@ -295,6 +247,8 @@ int main(void)
         *vga_reset = 1;
 
         *cam_start = 1;
+
+
         *clock_select = 0;
         snapshot = 0;
         //printf("Done\n");
@@ -340,57 +294,44 @@ int main(void)
         rec_2 = getCycles();
         printf("Done\n");
 
-        /*    	for (i = 0; i < 10; i++)
-        printf("%d:\t %u\n",i+1,cycle[i]);
-        */
-        //    printf("\n1: \t%d\n2: \t%d\n3: \t%d\n4: \n5: \n6: \t%d\n7: \t%d\n", main_1, main_2, main_3, main_6, main_7);
 
         final = (main_4 - main_1);
-        //        printf("\nTimes:\nMain: \t%d\n\n", final);
         totalCycles += final;
 
         final = (region_end - region_1);
         totalCycles += final;
-        //      printf("Region: \t%d\n", final);
-        /*	printf("\tBreakdown:\n");
-        printf("\t Large ROI:\t%d\n", LROIend - LROIstart);
-        printf("\t Small ROI:\t%d\n", SROIend - SROIstart);
-        printf("\t Array assignmet:\t%d\n\n", ROImovEnd - ROImovStart);
-        */
+
         final = (separate_end - region_end);
         totalCycles += separate_end - separate_start;
-        //        printf("Separator: \t%d\n", separate_end - separate_start);
-        /*	printf("\t single digit detection:\t%d\n",detection_end - detection_start);
-        printf("\t single digit normalization:\t%d\n",normalization_end - normalization_start);
-        printf("\t digits separated:\t%d\n",digits_separated);
-        */
+
 
         final = (rec_1 - resize_1);
-        //totalCycles += resize_end - resize_start;
-        //        printf("Resize: \t%d\n", resize_end - resize_start);
-        /*	printf("\tBreakdown:\n");
-        printf("\t resizing:\t%d\n", resizeEnd - resizeStart);
-        printf("\t Array assignment:\t%d\n\n", resizeMovEnd - resizeMovStart);
-        */
+
 
         final = (rec_2 - rec_1);
         totalCycles += recognizer_end - recognizer_start;
-        //        printf("Recognize: \t%d\n", recognizer_end - recognizer_start);
-        /*	printf("\tBreakdown:\n");
-        printf("\t First matrix mult:\t%d\n", MMend1 - MMstart1);
-        printf("\t First vector addition:\t%d\n", vend1 - vstart1);
-        printf("\t First sigmoid:\t%d\n", sigEnd1 -sigStart1);
-        printf("\t 2nd matrix mult:\t%d\n", MMend2 - MMstart2);
-        printf("\t 2nd vector addition:\t%d\n", vend2 - vstart2);
-        printf("\t 2nd sigmoid:\t%d\n", sigEnd2 - sigStart2);
-        printf("\t 3rd matrix mult:\t%d\n", MMend3 - MMstart3);
-        printf("\t Determining digit:\t%d\n\n", maxEnd - maxStart);
-        */
+
         printf("Total Cycles: \t%d\n", totalCycles);
+
+        for (i = 0; (i < height); i++)
+        {
+            for (k = 0; k < width; k++)
+            {
+                printf("%d\t", image[i][k]);
+            }
+            printf("\n");
+            //printed_rows = printed_rows + 1;
+        }/**/
+
     }
 
     return 0;
 }
+
+
+
+// ======================================================================================
+// ======================================================================================
 
 
 
@@ -849,7 +790,7 @@ return recognizer(vector);
 
 int recognizer(int data[784])
 {
-    
+
     long int Vb1[200], Vb2[200], Vb3[10]; // array[row][col]
     int M = 0;
     int i, j;
@@ -862,12 +803,12 @@ int recognizer(int data[784])
     // Vb1 = finalW1L1*data;
     for (i = 0; i < 200; i++)
     {
-        for (j = 0; j < 784; j++)
-        {
-            sum = sum + finalW1L1[i][j] * data[j];
-        } // Matrix Multiplication
-        Vb1[i] = sum;
-        sum = 0;
+    for (j = 0; j < 784; j++)
+    {
+    sum = sum + finalW1L1[i][j] * data[j];
+    } // Matrix Multiplication
+    Vb1[i] = sum;
+    sum = 0;
     } // Product into new Matrix
 
     //
@@ -878,7 +819,7 @@ int recognizer(int data[784])
     //Vb1 = Vb1 + finalB1L1;
     for (i = 0; i < 200; i++)
     {
-        Vb1[i] = Vb1[i] + finalB1L1[i];
+    Vb1[i] = Vb1[i] + finalB1L1[i];
     } // Matrix Addition
     //
     vend1 = getCycles();
@@ -888,32 +829,32 @@ int recognizer(int data[784])
     //Vb1 = sigmf(Vb1,[1 0]);
     for (i = 0; i < 200; i++)
     {
-        Vb1[i] = 1 / (1 + exp(-Vb1[i]));
+    Vb1[i] = 1 / (1 + exp(-Vb1[i]));
     } // Sigmoid
-    //  
+    //
     sigEnd1 = getCycles();
     //
     MMstart2 = getCycles();
     //Vb1 = finalW1L2*Vb1;
     for (i = 0; i < 200; i++)
     {
-        for (j = 0; j < 200; j++)
-        {
-            sum = sum + finalW1L2[i][j] * Vb1[j];
-        } // Matrix Multiplication
-        Vb2[i] = sum;
-        sum = 0;
+    for (j = 0; j < 200; j++)
+    {
+    sum = sum + finalW1L2[i][j] * Vb1[j];
+    } // Matrix Multiplication
+    Vb2[i] = sum;
+    sum = 0;
     } // Product into old Matrix
-    //  
+    //
     MMend2 = getCycles();
     //
     vstart2 = getCycles();
     //Vb1 = Vb1 + finalB1L2;
     for (i = 0; i < 200; i++)
     {
-        Vb2[i] = Vb2[i] + finalB1L2[i];
+    Vb2[i] = Vb2[i] + finalB1L2[i];
     } // Matrix Addition
-    // 
+    //
     vend2 = getCycles();
     //
     sigStart2 = getCycles();
@@ -921,7 +862,7 @@ int recognizer(int data[784])
     //Vb1 = sigmf(Vb1,[1 0]);
     for (i = 0; i < 200; i++)
     {
-        Vb2[i] = 1 / (1 + exp(-Vb2[i]));
+    Vb2[i] = 1 / (1 + exp(-Vb2[i]));
     } // Sigmoid
     //
     sigEnd2 = getCycles();
@@ -931,16 +872,16 @@ int recognizer(int data[784])
     //Vb1 = finalSoftmaxTheta*Vb1;          finalSoftmaxTheta[10][200]
     for (i = 0; i < 10; i++)
     {
-        for (j = 0; j < 200; j++)
-        {
-            sum = sum + finalSoftmaxTheta[i][j] * Vb2[j];
-        } //
-        Vb3[i] = sum;
-        sum = 0;
-    } // 
-    //  
+    for (j = 0; j < 200; j++)
+    {
+    sum = sum + finalSoftmaxTheta[i][j] * Vb2[j];
+    } //
+    Vb3[i] = sum;
+    sum = 0;
+    } //
+    //
     MMend3 = getCycles();
-    // 
+    //
     maxStart = getCycles();
 
 
@@ -948,11 +889,11 @@ int recognizer(int data[784])
     double max = 0;
     for (i = 0; i < 10; i++)
     {
-        if (max < Vb3[i])
-        {
-            max = Vb3[i];
-            M = i + 1;
-        }
+    if (max < Vb3[i])
+    {
+    max = Vb3[i];
+    M = i + 1;
+    }
     } // Finding Max Value
     //
     maxEnd = getCycles();
@@ -963,7 +904,7 @@ int recognizer(int data[784])
     //end
     if (M == 10)
     {
-        M = 0;
+    M = 0;
     } // Check for zero
 
 
