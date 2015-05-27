@@ -135,8 +135,26 @@ wire		[1:0]		controlled_clk;
 wire					HPS_CTRLING_CLK;
 wire 		[1:0]		controlled_read;
 
-wire 					queuer_read;
+// ============ ROI Stuff ===================================================
 
+wire ROI_sizing_done;
+wire ROI_start;
+wire [8:0] ROI_size_left;
+wire [8:0] ROI_size_right;
+wire [8:0] ROI_size_top;
+wire [8:0] ROI_size_bot;
+
+
+// ============ Bit Queuing stuff ============================================
+
+wire queuer_read;
+wire queuer_clk;
+wire queuer_rst;
+wire hps_queuing_ready;
+wire hps_queuing_rst;
+wire [31:0] img_data;
+
+// ===========================================================================
 
 // muxed clock
 assign controlled_clk[0] = VGA_CTRL_CLK;
@@ -187,24 +205,7 @@ assign	VGA_B		=	oVGA_B[9:2];
 wire [16:0] display_Color;
 assign display_Color = {sCCD_P,15'b111111111111111};
 
-// ============ ROI Stuff ===================================================
 
-wire ROI_sizing_done;
-wire [9:0] ROI_size_left;
-wire [9:0] ROI_size_right;
-wire [9:0] ROI_size_top;
-wire [9:0] ROI_size_bot;
-
-
-// ============ Bit Queuing stuff ============================================
-
-wire queuer_clk;
-wire queuer_rst;
-wire hps_queuing_ready;
-wire hps_queuing_rst;
-wire [31:0] img_data;
-
-// ===========================================================================
 
 
 
@@ -323,13 +324,19 @@ begin
 	read_good = read_clock_reg;
 end
 
+
+reg ready_clk = 0;
+always @(posedge hps_queuing_ready)
+begin
+	ready_clk <= ready_clk + 1'b1;
+end
+
 wire [6:0] counterTest;
-wire flag_test;
 // ============================================ LEDs
 assign	LEDR[9:3]		=	counterTest;
 assign	LEDR[0:0]		=	sdram_read;
 assign 	LEDR[1:1]		=	vga_read;
-assign 	LEDR[2:2]		=  flag_test;
+assign 	LEDR[2:2]		=  empty;
 
 // ==============================================
 
@@ -388,7 +395,24 @@ RAW2BW				u4	(
 							.iX_Cont(X_Cont),
 							.iY_Cont(Y_Cont)
 						);
+						
+						
+ROI					u10(
+							.oDone(ROI_sizing_done),
+							.oTopBound(ROI_size_top),
+							.oBotBound(ROI_size_bot),
+							.oLeftBound(ROI_size_left),
+							.oRightBound(ROI_size_right),
+							.iStart(ROI_start),
+							.iDATA(sCCD_P),
+							.iDVAL(sCCD_DVAL),
+							.iCLK(CCD_PIXCLK),
+							.iRST(DLY_RST_1),
+							.iFVAL(rCCD_FVAL)
+						);
 
+
+						
 						
 
 SEG7_LUT_8 			u5	(	
@@ -409,41 +433,41 @@ Sdram_Control_4Port	u7	(
 							.CLK(sdram_ctrl_clk),
 
 							//	FIFO Write Side 1
-							.WR1_DATA( wr1_data ),
-							.WR1(wr1_enable),
-							.WR1_ADDR(wr1_addr),					// Memory start for one section of the memory
-							.WR1_MAX_ADDR(wr1_max_addr),
+							.WR1_DATA({1'b0,display_Color[16:12],display_Color[16:7]}),
+							.WR1(sCCD_DVAL),
+							.WR1_ADDR(0),					// Memory start for one section of the memory
+							.WR1_MAX_ADDR(320*240),
 							.WR1_LENGTH(256),
-							.WR1_LOAD(wr1_load),
-							.WR1_CLK(wr1_clk),		// This clock is directly from the CCD Camera Module, the Camera controls the write to memory
+							.WR1_LOAD(!DLY_RST_0),
+							.WR1_CLK(~CCD_PIXCLK),		// This clock is directly from the CCD Camera Module, the Camera controls the write to memory
 							// CCD data is written on the falling edge of the CCD_PIXCLK
 
 							//	FIFO Write Side 2
-							.WR2_DATA(	wr2_data ),
-							.WR2(wr2_enable),
-							.WR2_ADDR(wr2_addr),		// Memory start for the second section of memory - why can we not write data into one memory block?
-							.WR2_MAX_ADDR(wr2_max_addr),
+							.WR2_DATA(	{1'b0,display_Color[11:7],display_Color[16:7]}),
+							.WR2(sCCD_DVAL),
+							.WR2_ADDR(22'h100000),		// Memory start for the second section of memory - why can we not write data into one memory block?
+							.WR2_MAX_ADDR(22'h100000+320*240),
 							.WR2_LENGTH(256),
-							.WR2_LOAD(wr2_load),
-							.WR2_CLK(wr2_clk),
+							.WR2_LOAD(!DLY_RST_0),
+							.WR2_CLK(~CCD_PIXCLK),
 
 							//	FIFO Read Side 1
 						   .RD1_DATA(Read_DATA1),	// goes into hps
-				        	.RD1(rd1_enable),	// hps controlled or vga controlled
-				        	.RD1_ADDR(rd1_addr),
-							.RD1_MAX_ADDR(rd1_max_addr),
+				        	.RD1(controlled_read[read_select]),	// hps controlled or vga controlled
+				        	.RD1_ADDR(0),
+							.RD1_MAX_ADDR(320*240),
 							.RD1_LENGTH(256),
-							.RD1_LOAD(rd1_load),	// used to reset sdram
-							.RD1_CLK(rd1_clk),
+							.RD1_LOAD((!DLY_RST_0)|(!vga_read_DATA1)|(!queuer_rst)),	// used to reset sdram
+							.RD1_CLK(~controlled_clk[source_select]),
 							
 							//	FIFO Read Side 2
 						   .RD2_DATA(Read_DATA2),	// is unused
-							.RD2(rd2_enable),
-							.RD2_ADDR(rd2_addr), // Memory start address
-							.RD2_MAX_ADDR(rd2_max_addr),	// Allocate enough space for whole 640 x 480 display
+							.RD2(controlled_read[read_select]),
+							.RD2_ADDR(22'h100000), // Memory start address
+							.RD2_MAX_ADDR(22'h100000+320*240),	// Allocate enough space for whole 640 x 480 display
 							.RD2_LENGTH(256),	// 8 bits long data storage
-				        	.RD2_LOAD(rd2_load),
-							.RD2_CLK(rd2_clk),
+				        	.RD2_LOAD((!DLY_RST_0)|(!vga_read_DATA1)|(!queuer_rst)),
+							.RD2_CLK(~controlled_clk[source_select]),
 							
 							//	SDRAM Side - Initialize the SDRAM - Can only initialize one per design
 							// Qsys does not allow the allocation of more than one SDRAM connected to the same DE1-SOC DRAM pin
@@ -463,14 +487,12 @@ BitQueuer 				u9(
 							.oData(img_data),
 							.oRD_CLK(queuer_clk),
 							.oRD_RST(queuer_rst),
-							.oflag(flag_test),
 							.oCounter(counterTest),
 							.oRead_req(queuer_read),
 							.iData(Read_DATA1[13]),
 							.iCLK(sdram_ctrl_clk),
-							.iRST(hps_queuing_rst & KEY[0]),
-							.iHPS_CLK(~KEY[3]|hps_queuing_ready),//hps_queuing_ready),
-							.iHPS_RST()
+							.iRST(hps_queuing_rst),
+							.iHPS_CLK(ready_clk),//hps_queuing_ready),
 						);
 						
 
@@ -548,8 +570,8 @@ I2C_CCD_Config 		u8	(
         .sizing_left_export        (ROI_size_left),        //         sizing_left.export
         .sizing_right_export       (ROI_size_right),       //        sizing_right.export
         .sizing_top_export         (ROI_size_top),         //          sizing_top.export
-        .sizing_bottom_export      (ROI_size_bot)  
-		  
+        .sizing_bottom_export      (ROI_size_bot),
+		  .sizing_start_export       (ROI_start)
 		  
 		  
 		  );
