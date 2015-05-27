@@ -63,8 +63,6 @@
 
 // Computing ROI and Separate Images
 int w, x, y, v, lt, lb, rt, rb;
-int roi[HEIGHT][WIDTH];
-int digit[HEIGHT][WIDTH];
 
 
 // Timing Variables
@@ -279,15 +277,15 @@ int main(void)
         region2(&width, &height, image);
         region_end = getCycles();
 
-        /*printf("ROI = %d  x %d\n",height, width);
+        printf("ROI = %d  x %d\n", height, width);
         printf("\n\n");
         for (i = 0; i < height; i++)
         {
-        for (k = 0; k < width; k++)
-        {
-        printf("%d\t",image[i][k]);
-        }
-        printf("\n");
+            for (k = 0; k < width; k++)
+            {
+                printf("%d\t", image[i][k]);
+            }
+            printf("\n");
         } /* */
         //printf("Region Found\n\n");
 
@@ -585,8 +583,8 @@ int resize2(int width, int height, int **digit) {
         }
     }
 
-    /*
-    printf("resized image:\n");
+
+    /*printf("resized image:\n");
     int i = 0;
     int k = 0;
     for (i = 0; i < 28; i++)
@@ -597,195 +595,19 @@ int resize2(int width, int height, int **digit) {
     }
     printf("\n");
     }
-    */
+    /**/
     return recognizer(vect);
 }
 
 
-/*
-// bilinear
-int resize2(int width, int height, int **digit)
-{
-resize_start = getCycles();
 
-int scaled_img[28][28];
-int A, B, C, D, x, y, index, pixel;
-float x_ratio = ((float)(width - 1)) / 28;
-float y_ratio = ((float)(height - 1)) / 28;
-float x_diff, y_diff;
-int r = 0;
-int c = 0;
-int vect[784];
-int v_index = 0;
-
-for (r = 0; r<28; r++) {
-for (c = 0; c<28; c++) {
-x = (int)(x_ratio * c);
-y = (int)(y_ratio * r);
-x_diff = (x_ratio * c) - x;
-y_diff = (y_ratio * r) - y;
-index = y*w + x;
-
-A = digit[r][c] & 0xff;
-B = digit[r][c+1] & 0xff;
-C = digit[r+1][c] & 0xff;
-D = digit[r+1][c+1] & 0xff;
-
-pixel = (int)(
-A*(1 - x_diff)*(1 - y_diff) + B*(x_diff)*(1 - y_diff) +
-C*(y_diff)*(1 - x_diff) + D*(x_diff*y_diff)
-);
-
-scaled_img[r][c] = pixel;
-}
-}
-
-for (c = 0; c < 28; c++)
-{
-for (r = 0; r < 28; r++)
-{
-vect[v_index] = scaled_img[r][c];
-v_index++;
-}
-}
-
-resize_end = getCycles();
-printf("resized image:\n");
-int i = 0;
-int k = 0;
-for (i = 0; i < 28; i++)
-{
-for (k = 0; k < 28; k++)
-{
-printf("%d\t", scaled_img[i][k]);
-}
-printf("\n");
-}
-
-return recognizer(vect);
-
-}
-*/
-
-
-/*
-// chan's algorithm
-int resize2(int height, int width, int** img){
-resize_start = getCycles();
-int scaled_img[28][28];
-int vector[784];
-
-//
-//col and row specify squares. p examines pixels. s is used for the scaled img. v is vector index.
-//
-
-int col, row, p_col, p_row, s_col = 0, s_row = 0, v_index;
-
-//Scales divide by 28 rounded up.
-int col_scale = (width + 27) / 28;
-int row_scale = (height + 27) / 28;
-
-//avg is used to calculate the average white density of a square, given by size square.
-double avg;
-double square = col_scale * row_scale;
-
-
-//
-// Initialize the image to be all black
-//
-int i, j;
-
-//
-resizeStart = getCycles();
-for (i = 0; i < 28; i++){
-
-for (j = 0; j < 28; j++)
-scaled_img[i][j] = BLACK;
-
-}
-printf("initialized black box\n");
-//
-//Examine the image, magnifying rectangle by rectangle down to 28 = (size - size%28)/scale
-//where size is the row or column and the scale is the calculated scale rounded up.
-//
-
-for (row = 0; row < (height - (height % 28)); row += row_scale){
-
-s_col = 0;
-
-for (col = 0; col < (width - (width % 28)); col += col_scale)
-{
-
-avg = 0;
-
-//
-//Calculate the average of a square given starting coordinates
-//
-
-for (p_row = 0; p_row < row_scale && ((row + p_row) < height); p_row++)
-{
-for (p_col = 0; p_col < col_scale && ((col + p_col) < width); p_col++)
-{
-avg += img[row + p_row][col + p_col];
-}
-}
-
-avg = avg / square;
-
-if (avg >= 0.5)
-{
-scaled_img[s_row][s_col] = WHITE;
-}
-else
-{
-scaled_img[s_row][s_col] = BLACK;
-}
-s_col++;
-}
-
-s_row++;
-}
-//
-resizeEnd = getCycles();
-
-printf("resized\n");
-//
-//Convert the scaled image to a vector for recognizer to use
-//
-resizeMovStart = getCycles();
-v_index = 0;
-for (s_col = 0; s_col < 28; s_col++)
-{
-for (s_row = 0; s_row < 28; s_row++)
-{
-vector[v_index] = scaled_img[s_row][s_col];
-v_index++;
-}
-}
-
-//
-resizeMovEnd = getCycles();
-
-int k = 0;
-for (i = 0; i < 28; i++)
-{
-for (k = 0; k < 28; k++)
-{
-printf("%d\t",scaled_img[i][k]);
-}
-printf("\n");
-}
-resize_end = getCycles();
-return recognizer(vector);
-}
-*/
 
 
 
 int recognizer(int data[784])
 {
 
-    long int Vb1[200], Vb2[200], Vb3[10]; // array[row][col]
+    long int Vb1[200] = { 0 }, Vb2[200] = { 0 }, Vb3[10] = { 0 }; // array[row][col]
     int M = 0;
     int i, j;
     long double sum = 0;
@@ -795,70 +617,46 @@ int recognizer(int data[784])
     // Vb1 = finalW1L1*data;
     for (i = 0; i < 200; i++)
     {
+
         for (j = 0; j < 784; j++)
         {
-            if (data[j] == 1)
-                sum = sum + finalW1L1[i][j];
+            if (data[j])
+                Vb1[i] = Vb1[i] + finalW1L1[i][j];
         } // Matrix Multiplication
-        Vb1[i] = sum;
-        sum = 0;
+
+        Vb1[i] = Vb1[i] + finalB1L1[i]; // add biases
+        Vb1[i] = 1 / (1 + exp(-Vb1[i])); // sigmoid
     } // Product into new Matrix
 
-    //
 
-    //
-    //Vb1 = Vb1 + finalB1L1;
-    for (i = 0; i < 200; i++)
-    {
-        Vb1[i] = Vb1[i] + finalB1L1[i];
-    } // Matrix Addition
-    //
-    //
-
-    //Vb1 = sigmf(Vb1,[1 0]);
-    for (i = 0; i < 200; i++)
-    {
-        Vb1[i] = 1 / (1 + exp(-Vb1[i]));
-    } // Sigmoid
     //
     //
     //Vb1 = finalW1L2*Vb1;
     for (i = 0; i < 200; i++)
     {
+
         for (j = 0; j < 200; j++)
         {
-            sum = sum + finalW1L2[i][j] * Vb1[j];
+            if (Vb1[j] != 0)
+                Vb2[i] = Vb2[i] + finalW1L2[i][j] * Vb1[j];
         } // Matrix Multiplication
-        Vb2[i] = sum;
-        sum = 0;
-    } // Product into old Matrix
-    //
-    //
-    //Vb1 = Vb1 + finalB1L2;
-    for (i = 0; i < 200; i++)
-    {
         Vb2[i] = Vb2[i] + finalB1L2[i];
-    } // Matrix Addition
-    //
-    //
-
-    //Vb1 = sigmf(Vb1,[1 0]);
-    for (i = 0; i < 200; i++)
-    {
         Vb2[i] = 1 / (1 + exp(-Vb2[i]));
-    } // Sigmoid
+    } // Product into old Matrix
+
     //
     //
 
     //Vb1 = finalSoftmaxTheta*Vb1;          finalSoftmaxTheta[10][200]
     for (i = 0; i < 10; i++)
     {
+
         for (j = 0; j < 200; j++)
         {
-            sum = sum + finalSoftmaxTheta[i][j] * Vb2[j];
+            if (Vb2[j] != 0)
+                Vb3[i] = Vb3[i] + finalSoftmaxTheta[i][j] * Vb2[j];
         } //
-        Vb3[i] = sum;
-        sum = 0;
+
     } //
     //
     //
